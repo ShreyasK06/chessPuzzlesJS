@@ -1,5 +1,37 @@
+html {
+    box-sizing: border-box;
+}
+
+body {
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+
+}
+
+#gameBtns {
+    margin-right: auto;
+    margin-left: auto;
+}
+
+#startBtn {
+    background-color: #02BA0F;
+    border-radius: 10px;
+}
+
+#clearBtn {
+    background-color: #D21404;
+    border-radius: 10px;
+}
+
+button :active {
+    transform: translateY(3px);
+}
+
 #board {
-    max-width: 100%;
-    height: auto;
-    overflow: scroll;
+    margin-top: 20px;
+    width: 405px;
+    height: 425px;
+    margin-bottom: 0px;
 }
