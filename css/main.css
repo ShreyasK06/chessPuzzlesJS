@@ -3,11 +3,24 @@ html {
 }
 
 body {
-    display: flex;
     text-align: center;
-    justify-content: center;
-    align-items: center;
 
+}
+
+h1 {
+    width: 100vh;
+    border: 6px solid black;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 10px;
+}
+
+a {
+    color: black;
+}
+
+a:hover {
+    color: black;
 }
 
 #gameBtns {
@@ -34,4 +47,6 @@ button :active {
     width: 405px;
     height: 425px;
     margin-bottom: 0px;
+    margin-left: auto;
+    margin-right: auto;
 }
