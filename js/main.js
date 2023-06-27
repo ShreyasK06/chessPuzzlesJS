@@ -110,12 +110,13 @@ const english = 'r1b1kbnr/pppp1ppp/2n5/4P3/1q3B2/5N2/PPP1PPPP/RN1QKB1R w KQkq - 
 const sicilian = 'r1bqk2r/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQkq - 0 1';
 
 function setButtons() {
-    $('#startBtn').on('click', board.start)
-    $('#clearBtn').on('click', function () {
-        board.clear
+    $('#startBtn').on('click', function () {
+        board.start()
+        game.reset();
         document.getElementById('gameState').innerHTML = '';
         document.getElementById('gameState').classList.remove('over');
-    });
+
+    })
     $('#ruyLopez').on('click', function () {
         board.position(ruyLopez)
     });

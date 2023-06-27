@@ -20,6 +20,16 @@ h1 {
     border-radius: 10px;
     background-color: whitesmoke;
     display: inline-block;
+    border: 6px solid black;
+}
+
+h2 {
+    width: 100vh;
+    margin-left: 0px;
+    margin-right: 0;
+    border-radius: 10px;
+    background-color: whitesmoke;
+    display: inline-block;
 }
 
 
@@ -31,11 +41,8 @@ a:hover {
     color: black;
 }
 
-#name {
-    border: 6px solid black;
-}
 
-#openings {
+/* #openings {
     background-color: whitesmoke;
     width: 40vh;
     border: 6px solid black;
@@ -43,9 +50,9 @@ a:hover {
     margin-left: 20px;
     position: relative;
     display: inline-block;
-}
+} */
 
-#btnContent {
+/* #btnContent {
     display: none;
     position: absolute;
     background-color: whitesmoke;
@@ -59,9 +66,9 @@ a:hover {
     width: 250px;
     border-radius: 10px;
     display: grid;
-}
+} */
 
-#ai {
+#puzzle {
     background-color: whitesmoke;
     width: 40vh;
     border: 6px solid black;
@@ -71,7 +78,7 @@ a:hover {
     display: inline-block;
 }
 
-#aiContent {
+#puzzleContent {
     display: none;
     position: absolute;
     background-color: whitesmoke;
@@ -80,7 +87,7 @@ a:hover {
     z-index: 1;
 }
 
-#ai:hover #aiContent {
+#puzzle:hover #puzzleContent {
     margin-top: 10px;
     width: 250px;
     border-radius: 10px;
@@ -96,19 +103,44 @@ a:hover {
 }
 
 #startBtn {
-    background-color: #02BA0F;
-}
-
-#clearBtn {
-    background-color: #D21404;
+    background-color: #04AA6D;
 }
 
 #undoBtn {
-    background-color: #0492C2;
+    background-color: #2196F3;
 }
 
 #redoBtn {
-    background-color: #0492C2;
+    background-color: #2196F3;
+}
+
+#ai {
+    width: 30px;
+    height: 30px;
+    font-size: 30px;
+    display: inline-block;
+}
+
+#aiContent {
+    font-size: 20px;
+    display: none;
+    position: absolute;
+    background-color: transparent;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    padding: 12px 16px;
+    z-index: 1;
+}
+
+#ai:hover #aiContent {
+    margin-bottom: 40px;
+    width: 700px;
+    border-radius: 10px;
+    display: inline;
+}
+
+#ai:hover {
+    margin-right: 700px;
+    color: transparent;
 }
 
 button :active {
@@ -121,10 +153,67 @@ button {
 }
 
 #board {
-    margin-top: 20px;
     width: 405px;
     height: 425px;
-    margin-bottom: 0px;
+    margin-top: 30px;
     margin-left: auto;
     margin-right: auto;
+    display: block;
+}
+
+#mySidenav {
+    background-color: whitesmoke;
+    width: 40vh;
+    border: 6px solid black;
+    border-radius: 10px;
+    margin-left: 100px;
+    position: relative;
+    display: inline-block;
+}
+
+#mySidenav button {
+    position: absolute;
+    right: -80px;
+    transition: 0.3s;
+    height: 80px;
+    width: 150px;
+    font-size: 20px;
+    color: black;
+    border-radius: 5px 0 0 5px;
+    margin-bottom: 5px;
+}
+
+#mySidenav button:hover {
+    right: 0;
+}
+
+
+#ruyLopez {
+    top: 95px;
+    background-color: #04AA6D;
+}
+
+#italian {
+    top: 180px;
+    background-color: #2196F3;
+}
+
+#french {
+    top: 265px;
+    background-color: #f44336;
+}
+
+#queens {
+    top: 350px;
+    background-color: #555
+}
+
+#english {
+    top: 435px;
+    background-color: #f44336;
+}
+
+#sicilian {
+    top: 520px;
+    background-color: #555
 }
