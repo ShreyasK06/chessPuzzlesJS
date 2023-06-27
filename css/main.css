@@ -15,12 +15,13 @@ body {
 
 h1 {
     width: 100vh;
-    border: 6px solid black;
-    margin-left: auto;
-    margin-right: auto;
+    margin-left: 0px;
+    margin-right: 0;
     border-radius: 10px;
     background-color: whitesmoke;
+    display: inline-block;
 }
+
 
 a {
     color: black;
@@ -30,19 +31,84 @@ a:hover {
     color: black;
 }
 
-#gameBtns {
-    margin-right: auto;
-    margin-left: auto;
+#name {
+    border: 6px solid black;
+}
+
+#openings {
+    background-color: whitesmoke;
+    width: 40vh;
+    border: 6px solid black;
+    border-radius: 10px;
+    margin-left: 20px;
+    position: relative;
+    display: inline-block;
+}
+
+#btnContent {
+    display: none;
+    position: absolute;
+    background-color: whitesmoke;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    padding: 12px 16px;
+    z-index: 1;
+}
+
+#openings:hover #btnContent {
+    margin-top: 10px;
+    width: 250px;
+    border-radius: 10px;
+    display: grid;
+}
+
+#ai {
+    background-color: whitesmoke;
+    width: 40vh;
+    border: 6px solid black;
+    border-radius: 10px;
+    margin-right: 20px;
+    position: relative;
+    display: inline-block;
+}
+
+#aiContent {
+    display: none;
+    position: absolute;
+    background-color: whitesmoke;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    padding: 12px 16px;
+    z-index: 1;
+}
+
+#ai:hover #aiContent {
+    margin-top: 10px;
+    width: 250px;
+    border-radius: 10px;
+    display: grid;
+}
+
+.op {
+    width: 200px;
+}
+
+.over {
+    border: 6px solid black;
 }
 
 #startBtn {
     background-color: #02BA0F;
-    border-radius: 10px;
 }
 
 #clearBtn {
     background-color: #D21404;
-    border-radius: 10px;
+}
+
+#undoBtn {
+    background-color: #0492C2;
+}
+
+#redoBtn {
+    background-color: #0492C2;
 }
 
 button :active {
@@ -51,6 +117,7 @@ button :active {
 
 button {
     font-family: Rubik, sans-serif;
+    border-radius: 10px;
 }
 
 #board {

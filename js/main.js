@@ -2,6 +2,9 @@ var board = null
 var game = new Chess()
 var whiteSquareGrey = '#a9a9a9'
 var blackSquareGrey = '#696969'
+let lastPos;
+let easy = false;
+let turn;
 
 function removeGreySquares() {
     $('#board .square-55d63').css('background', '')
@@ -31,6 +34,17 @@ function onDragStart(source, piece) {
     }
 }
 
+function makeRandomMove() {
+    var possibleMoves = game.moves()
+
+    // game over
+    if (possibleMoves.length === 0) return
+
+    var randomIdx = Math.floor(Math.random() * possibleMoves.length)
+    game.move(possibleMoves[randomIdx])
+    board.position(game.fen())
+}
+
 function onDrop(source, target) {
     removeGreySquares()
     // see if the move is legal
@@ -39,9 +53,12 @@ function onDrop(source, target) {
         to: target,
         promotion: 'q' // NOTE: always promote to a queen for example simplicity
     })
+    turn = game.turn();
 
     // illegal move
     if (move === null) return 'snapback'
+
+    window.setTimeout(makeRandomMove, 20)
 }
 
 function onMouseoverSquare(square, piece) {
@@ -94,7 +111,11 @@ const sicilian = 'r1bqk2r/pp2ppbp/2np1np1/8/3NP3/2N1BP2/PPPQ2PP/R3KB1R w KQkq - 
 
 function setButtons() {
     $('#startBtn').on('click', board.start)
-    $('#clearBtn').on('click', board.clear)
+    $('#clearBtn').on('click', function () {
+        board.clear
+        document.getElementById('gameState').innerHTML = '';
+        document.getElementById('gameState').classList.remove('over');
+    });
     $('#ruyLopez').on('click', function () {
         board.position(ruyLopez)
     });
@@ -117,14 +138,24 @@ function setButtons() {
     $('#sicilian').on('click', function () {
         board.position(sicilian)
     });
-}
 
+    $('#undoBtn').on('click', function () {
+        lastPos = game.fen();
+        game.undo();
+        board.position(game.fen());
+    });
+    $('#redoBtn').on('click', function () {
+        board.position(lastPos);
+    });
+}
 function displayGameOver() {
-    if (game.game_over()) {
-        if (game.turn == "b") {
-            console.log('white wins');
+    if (game.in_checkmate()) {
+        if (turn == "b") {
+            document.getElementById('gameState').innerHTML = 'WHITE WINS';
+            document.getElementById('gameState').classList.add('over');
         } else {
-            console.log('black wins');
+            document.getElementById('gameState').innerHTML = 'WHITE WINS';
+            document.getElementById('gameState').classList.add('over');
         }
     }
 }
