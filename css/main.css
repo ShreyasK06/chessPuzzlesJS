@@ -19,15 +19,25 @@ h1 {
     background-color: whitesmoke;
     display: inline-block;
     border: 6px solid black;
+    margin-left: auto;
 }
 
 h2 {
     width: 100vh;
-    margin-left: 0px;
-    margin-right: 0;
+    margin-left: auto;
+    margin-right: auto;
     border-radius: 10px;
     background-color: whitesmoke;
-    display: inline-block;
+    display: block;
+}
+
+h3 {
+    width: 50vh;
+    margin-left: auto;
+    margin-right: auto;
+    border-radius: 10px;
+    background-color: whitesmoke;
+    display: block;
 }
 
 
@@ -37,35 +47,6 @@ a {
 
 a:hover {
     color: black;
-}
-
-
-#puzzle {
-    background-color: whitesmoke;
-    width: 40vh;
-    border: 6px solid black;
-    border-radius: 10px;
-    margin-right: 50px;
-    margin-left: 0px;
-    justify-content: left;
-    align-items: center;
-    display: inline-block;
-}
-
-#puzzleContent {
-    display: none;
-    position: absolute;
-    background-color: whitesmoke;
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-    padding: 12px 16px;
-    z-index: 1;
-}
-
-#puzzle:hover #puzzleContent {
-    margin-top: 10px;
-    width: 250px;
-    border-radius: 10px;
-    display: grid;
 }
 
 .op {
@@ -83,6 +64,8 @@ a:hover {
 .off {
     background-color: #f44336;
 }
+
+
 
 #startBtn {
     background-color: #04AA6D;
@@ -146,10 +129,7 @@ button {
 }
 
 #mySidenav {
-    background-color: whitesmoke;
     width: 40vh;
-    border: 6px solid black;
-    border-radius: 10px;
     margin-left: 50px;
     margin-right: 0px;
     position: relative;
@@ -158,47 +138,88 @@ button {
 
 #mySidenav button {
     position: absolute;
-    right: -90px;
+    right: -38px;
+    margin-right: 0px;
     transition: 0.3s;
     height: 80px;
     width: 150px;
     font-size: 20px;
     color: black;
-    border-radius: 5px 0 0 5px;
+    border-radius: 5px 0px 0px 5px;
     margin-bottom: 5px;
 }
 
 #mySidenav button:hover {
-    right: -50px;
+    right: 30px;
 }
 
 
 #ruyLopez {
-    top: 95px;
+    top: 35px;
     background-color: #04AA6D;
 }
 
 #italian {
-    top: 180px;
+    top: 120px;
     background-color: #2196F3;
 }
 
 #french {
-    top: 265px;
+    top: 205px;
     background-color: #f44336;
 }
 
 #queens {
-    top: 350px;
-    background-color: #555
+    top: 290px;
+    background-color: #00f0a8;
 }
 
 #english {
-    top: 435px;
-    background-color: #f44336;
+    top: 375px;
+    background-color: #ED7014;
 }
 
 #sicilian {
-    top: 520px;
-    background-color: #555
+    top: 460px;
+    background-color: #FFFD37;
+}
+
+#myLeftnav {
+    width: 40vh;
+    margin-right: 50px;
+    margin-left: 0px;
+    position: relative;
+    display: inline-block;
+}
+
+#myLeftnav button {
+    position: absolute;
+    left: -38px;
+    margin-right: 0px;
+    transition: 0.3s;
+    height: 80px;
+    width: 150px;
+    font-size: 20px;
+    color: black;
+    border-radius: 0px 5px 5px 0px;
+    margin-bottom: 5px;
+}
+
+#myLeftnav button:hover {
+    left: 30px;
+}
+
+#puzzle {
+    top: 135px;
+    background-color: #04AA6D;
+}
+
+#chess960 {
+    top: 220px;
+    background-color: #2196F3;
+}
+
+#playground {
+    top: 305px;
+    background-color: #f44336;
 }
