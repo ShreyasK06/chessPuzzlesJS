@@ -46,12 +46,14 @@
 </head>
 
 <body>
-    <div id="puzzle">DAILY PUZZLES
-        <div id=puzzleContent>
-        </div>
+    <div id=myLeftnav>
+        <button id="puzzle" class="op">DAILY PUZZLES</button>
+        <button id="chess960" class="op">CHESS 960</button>
+        <button id="playground" class="op">PLAYGROUND</button>
     </div>
+
     <h1 id="name"><a href="https://shreyask06.github.io/MyWebsite/">CHESS</a></h1>
-    <div id=mySidenav>OPENINGS
+    <div id=mySidenav>
         <button id="ruyLopez" class="op">RUY LOPEZ</button>
         <button id="italian" class="op">ITALIAN</button>
         <button id="french" class="op">FRENCH</button>
@@ -59,8 +61,10 @@
         <button id="english" class="op">ENGLISH</button>
         <button id="sicilian" class="op">SICILAN</button>
     </div>
+
     <h2 id="gameState"></h2>
     <div id="chess">
+        <h3 id="level"></h3>
         <div id="ai">🤖
             <div id="aiContent">
                 <button id="easy">EASY LEVEL</button>
@@ -75,7 +79,6 @@
             <button id="undoBtn">UNDO MOVE</button>
             <button id="redoBtn">REDO MOVE</button>
         </div>
-    </div>
 
 </body>
 

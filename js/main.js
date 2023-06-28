@@ -4,6 +4,9 @@ var whiteSquareGrey = '#a9a9a9'
 var blackSquareGrey = '#696969'
 let lastPos;
 let easy = false;
+let medium = false;
+let hard = false;
+let grandmaster = false;
 let turn;
 
 function removeGreySquares() {
@@ -58,7 +61,9 @@ function onDrop(source, target) {
     // illegal move
     if (move === null) return 'snapback'
 
-    window.setTimeout(makeRandomMove, 20)
+    if (easy || medium || hard || grandmaster) {
+        window.setTimeout(makeRandomMove, 20)
+    }
 }
 
 function onMouseoverSquare(square, piece) {
@@ -153,14 +158,75 @@ function setButtons() {
         if (easy) {
             easy = false;
             document.getElementById('easy').classList.remove('on');
-            document.getElementById('easy').classList.remove('off');
+            document.getElementById('easy').classList.add('off');
+            checkOff()
         } else {
             easy = true;
-            document.getElementById('easy').classList.remove('off');
-            document.getElementById('easy').classList.remove('on');
+            switchBtnMode('grandmaster', 'hard', 'medium', 'easy');
+
+        }
+    })
+
+    $('#medium').on('click', function () {
+        if (medium) {
+            medium = false;
+            document.getElementById('medium').classList.remove('on');
+            document.getElementById('medium').classList.add('off');
+            checkOff()
+        } else {
+            medium = true;
+            switchBtnMode('grandmaster', 'hard', 'easy', 'medium');
+        }
+    })
+
+    $('#hard').on('click', function () {
+        if (hard) {
+            hard = false;
+            document.getElementById('hard').classList.remove('on');
+            document.getElementById('hard').classList.add('off');
+            checkOff()
+        } else {
+            hard = true;
+            switchBtnMode('grandmaster', 'medium', 'easy', 'hard');
+        }
+    })
+
+    $('#grandmaster').on('click', function () {
+        if (grandmaster) {
+            grandmaster = false;
+            document.getElementById('grandmaster').classList.remove('on');
+            document.getElementById('grandmaster').classList.add('off');
+            checkOff()
+        } else {
+            grandmaster = true;
+            switchBtnMode('hard', 'medium', 'easy', 'grandmaster');
         }
     })
 }
+
+function switchBtnMode(on1, on2, on3, off1) {
+    document.getElementById(on1).classList.remove('on');
+    document.getElementById(on1).classList.add('off');
+    document.getElementById(on2).classList.remove('on');
+    document.getElementById(on2).classList.add('off');
+    document.getElementById(on3).classList.remove('on');
+    document.getElementById(on3).classList.add('off');
+    document.getElementById(on3).classList.remove('on');
+    document.getElementById(on3).classList.add('off');
+    document.getElementById(off1).classList.add('on');
+    document.getElementById(off1).classList.remove('off');
+
+    document.getElementById('level').innerHTML = off1.toUpperCase() + ' LEVEL';
+    document.getElementById('level').classList.add('over');
+}
+
+function checkOff() {
+    if (!easy && !medium && !hard && !grandmaster) {
+        document.getElementById('level').innerHTML = ' ';
+        document.getElementById('level').classList.remove('over');
+    }
+}
+
 function displayGameOver() {
     if (game.in_checkmate()) {
         if (turn == "b") {
@@ -170,6 +236,15 @@ function displayGameOver() {
             document.getElementById('gameState').innerHTML = 'WHITE WINS';
             document.getElementById('gameState').classList.add('over');
         }
+    } else if (game.in_threefold_repetition()) {
+        document.getElementById('gameState').innerHTML = 'THREEFOLD REPETITION';
+        document.getElementById('gameState').classList.add('over');
+    } else if (game.in_stalemate()) {
+        document.getElementById('gameState').innerHTML = 'STALEMATE';
+        document.getElementById('gameState').classList.add('over');
+    } else if (game.insufficient_material()) {
+        document.getElementById('gameState').innerHTML = 'INSUFFICIENT MATERIAL';
+        document.getElementById('gameState').classList.add('over');
     }
 }
 
