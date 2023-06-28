@@ -148,6 +148,18 @@ function setButtons() {
     $('#redoBtn').on('click', function () {
         board.position(lastPos);
     });
+
+    $('#easy').on('click', function () {
+        if (easy) {
+            easy = false;
+            document.getElementById('easy').classList.remove('on');
+            document.getElementById('easy').classList.remove('off');
+        } else {
+            easy = true;
+            document.getElementById('easy').classList.remove('off');
+            document.getElementById('easy').classList.remove('on');
+        }
+    })
 }
 function displayGameOver() {
     if (game.in_checkmate()) {

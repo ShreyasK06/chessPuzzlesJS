@@ -15,8 +15,6 @@ body {
 
 h1 {
     width: 100vh;
-    margin-left: 0px;
-    margin-right: 0;
     border-radius: 10px;
     background-color: whitesmoke;
     display: inline-block;
@@ -42,39 +40,15 @@ a:hover {
 }
 
 
-/* #openings {
-    background-color: whitesmoke;
-    width: 40vh;
-    border: 6px solid black;
-    border-radius: 10px;
-    margin-left: 20px;
-    position: relative;
-    display: inline-block;
-} */
-
-/* #btnContent {
-    display: none;
-    position: absolute;
-    background-color: whitesmoke;
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-    padding: 12px 16px;
-    z-index: 1;
-}
-
-#openings:hover #btnContent {
-    margin-top: 10px;
-    width: 250px;
-    border-radius: 10px;
-    display: grid;
-} */
-
 #puzzle {
     background-color: whitesmoke;
     width: 40vh;
     border: 6px solid black;
     border-radius: 10px;
-    margin-right: 20px;
-    position: relative;
+    margin-right: 50px;
+    margin-left: 0px;
+    justify-content: left;
+    align-items: center;
     display: inline-block;
 }
 
@@ -102,6 +76,14 @@ a:hover {
     border: 6px solid black;
 }
 
+.on {
+    background-color: #04AA6D;
+}
+
+.off {
+    background-color: #f44336;
+}
+
 #startBtn {
     background-color: #04AA6D;
 }
@@ -118,11 +100,13 @@ a:hover {
     width: 30px;
     height: 30px;
     font-size: 30px;
+    margin-left: auto;
+    margin-right: auto;
     display: inline-block;
 }
 
 #aiContent {
-    font-size: 20px;
+    font-size: 15px;
     display: none;
     position: absolute;
     background-color: transparent;
@@ -132,14 +116,14 @@ a:hover {
 }
 
 #ai:hover #aiContent {
-    margin-bottom: 40px;
-    width: 700px;
+    margin-right: 700px;
+    display: block;
+    width: 550px;
+    margin-bottom: 100px;
     border-radius: 10px;
-    display: inline;
 }
 
 #ai:hover {
-    margin-right: 700px;
     color: transparent;
 }
 
@@ -166,14 +150,15 @@ button {
     width: 40vh;
     border: 6px solid black;
     border-radius: 10px;
-    margin-left: 100px;
+    margin-left: 50px;
+    margin-right: 0px;
     position: relative;
     display: inline-block;
 }
 
 #mySidenav button {
     position: absolute;
-    right: -80px;
+    right: -90px;
     transition: 0.3s;
     height: 80px;
     width: 150px;
@@ -184,7 +169,7 @@ button {
 }
 
 #mySidenav button:hover {
-    right: 0;
+    right: -50px;
 }
 
 
