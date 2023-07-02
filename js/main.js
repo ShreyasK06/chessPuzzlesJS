@@ -3,6 +3,7 @@ var game = new Chess()
 var whiteSquareGrey = '#a9a9a9'
 var blackSquareGrey = '#696969'
 let lastPos;
+let position;
 let easy = false;
 let medium = false;
 let hard = false;
@@ -97,7 +98,7 @@ function onSnapEnd() {
 
 var config = {
     draggable: true,
-    position: 'start',
+    position: position,
     onDragStart: onDragStart,
     onDrop: onDrop,
     onMouseoutSquare: onMouseoutSquare,
@@ -123,26 +124,32 @@ function setButtons() {
 
     })
     $('#ruyLopez').on('click', function () {
-        board.position(ruyLopez)
+        position = ruyLopez
+        board.position(position);
     });
     $('#italian').on('click', function () {
-        board.position(italian)
+        position = italian
+        board.position(position);
     });
 
     $('#french').on('click', function () {
-        board.position(french)
+        position = french;
+        board.position(position);
     });
 
     $('#queens').on('click', function () {
-        board.position(queens)
+        position = queens;
+        board.position(position);
     });
 
     $('#english').on('click', function () {
-        board.position(english)
+        position = english;
+        board.position(position);
     });
 
     $('#sicilian').on('click', function () {
-        board.position(sicilian)
+        position = sicilian;
+        board.position(position);
     });
 
     $('#undoBtn').on('click', function () {
