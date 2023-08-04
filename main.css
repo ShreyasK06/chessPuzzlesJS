@@ -65,6 +65,16 @@ a:hover {
     background-color: #f44336;
 }
 
+.pgMode {
+    margin-top: 100px;
+}
+
+.gameMode {
+    margin-bottom: 0px;
+}
+
+
+
 
 
 #startBtn {
@@ -222,4 +232,9 @@ button {
 #playground {
     top: 305px;
     background-color: #f44336;
+}
+
+#traditional {
+    top: 390px;
+    background-color: #FFFD37;
 }
