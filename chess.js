@@ -1090,31 +1090,151 @@ var Chess = function (fen) {
   }
 
   function ascii() {
-    var s = '   +------------------------+\n'
-    for (var i = SQUARES.a8; i <= SQUARES.h1; i++) {
+    var s = [];
+    var r1 = [];
+    var r2 = [];
+    var r3 = [];
+    var r4 = [];
+    var r5 = [];
+    var r6 = [];
+    var r7 = [];
+    var r8 = [];
+    for (var i = SQUARES.a1; i <= SQUARES.h1; i++) {
       /* display the rank */
-      if (file(i) === 0) {
-        s += ' ' + '87654321'[rank(i)] + ' |'
-      }
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
 
       /* empty piece */
       if (board[i] == null) {
-        s += ' . '
+        r1 += ' ';
       } else {
         var piece = board[i].type
         var color = board[i].color
-        var symbol = color === WHITE ? piece.toUpperCase() : piece.toLowerCase()
-        s += ' ' + symbol + ' '
-      }
-
-      if ((i + 1) & 0x88) {
-        s += '|\n'
-        i += 8
+        var symbol = color + piece.toUpperCase();
+        r1 += symbol;
       }
     }
-    s += '   +------------------------+\n'
-    s += '     a  b  c  d  e  f  g  h\n'
+    for (var i = SQUARES.a2; i <= SQUARES.h2; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
 
+      /* empty piece */
+      if (board[i] == null) {
+        r2 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r2 += symbol;
+      }
+    }
+    for (var i = SQUARES.a3; i <= SQUARES.h3; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r3 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r3 += symbol;
+      }
+    }
+    for (var i = SQUARES.a4; i <= SQUARES.h4; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r4 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r4 += symbol;
+      }
+    }
+    for (var i = SQUARES.a5; i <= SQUARES.h5; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r5 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r5 += symbol;
+      }
+    }
+    for (var i = SQUARES.a6; i <= SQUARES.h6; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r6 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r6 += symbol;
+      }
+    }
+    for (var i = SQUARES.a7; i <= SQUARES.h7; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r7 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r7 += symbol;
+      }
+    }
+    for (var i = SQUARES.a8; i <= SQUARES.h8; i++) {
+      /* display the rank */
+      // if (file(i) === 0) {
+      //   s += ' ' + '87654321'[rank(i)] + ' |'
+      // }
+
+      /* empty piece */
+      if (board[i] == null) {
+        r8 += ' ';
+      } else {
+        var piece = board[i].type
+        var color = board[i].color
+        var symbol = color + piece.toUpperCase();
+        r8 += symbol;
+      }
+    }
+    s.push(r1);
+    s.push(r2);
+    s.push(r3);
+    s.push(r4);
+    s.push(r5);
+    s.push(r6);
+    s.push(r7);
+    s.push(r8);
     return s
   }
 

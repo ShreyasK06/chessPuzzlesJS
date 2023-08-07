@@ -14,9 +14,11 @@ let playingPuzzle = false;
 let puzzleMoves;
 let puzzleMovesMade = 0;
 let puzzleFen;
-let bestMove = '';
-let hardMove = ' ';
+let hardMove;
 let receivedMove = false;
+let move;
+let bestMovesWhite = [];
+let whiteMoves = [];
 
 function removeGreySquares() {
     $('#board .square-55d63').css('background', '')
@@ -89,41 +91,55 @@ function makeMediumMove() {
 
 }
 
-function makeHardMove() {
-
+async function makeHardMove() {
+    await getHardMove();
+    console.log(hardMove);
+    var from = hardMove.substring(0, 2);
+    var to = hardMove.substring(2, 4);
+    console.log(from);
+    console.log(to);
+    var queen = 'p';
+    if (hardMove.length == 5) {
+        queen = hardMove.substring(4, 5);
+    }
+    if (queen === 'p') {
+        game.move({ from: from, to: to });
+    } else {
+        game.move({ from: from, to: to, promotion: queen });
+    }
+    board.position(game.fen());
 }
 
-function makeGrandmasterMove(gamePos) {
-    // let move;
-    // let result;
-    // try {
-    //     const response = await fetch(`https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=${gamePos}`, {
-    //         method: 'POST',
-    //         headers: {
-    //             'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
-    //             'X-RapidAPI-Host': 'chess-stockfish-16-api.p.rapidapi.com'
-    //         }
-    //     });
-    //     if (response.ok) {
-    //         result = await response.json();
-    //         move = result.bestmove;
-    //         console.log(move);
-    //         // var from = move.substring(0, 2);
-    //         // var to = move.substring(2, 4);
-    //         // var queen = 'p';
-    //         // if (move.length == 5) {
-    //         //     queen = move.substring(4, 5);
-    //         // }
-    //         // if (queen === 'p') {
-    //         //     game.move({ from: from, to: to });
-    //         // } else {
-    //         //     game.move({ from: from, to: to, promotion: queen });
-    //         // }
-    //         // board.position(game.fen());
-    //     }
-    // } catch (err) {
-    //     console.error(err);
-    // }
+async function makeGrandmasterMove() {
+    await getBestMove();
+    if (move) {
+        console.log(move);
+        var from = move.substring(0, 2);
+        var to = move.substring(2, 4);
+        var queen = 'p';
+        if (move.length == 5) {
+            queen = move.substring(4, 5);
+        }
+        if (queen === 'p') {
+            game.move({ from: from, to: to });
+        } else {
+            game.move({ from: from, to: to, promotion: queen });
+        }
+        board.position(game.fen());
+        move = null;
+    } else {
+        await getBestMove();
+        var possibleMoves = game.moves();
+        for (let i = 0; i < possibleMoves.length; i++) {
+            game.move(possibleMoves[i]);
+            if (game.in_checkmate()) {
+                board.position(game.fen())
+            } else {
+                game.undo();
+            }
+        }
+        makeGrandmasterMove();
+    }
 
 }
 
@@ -146,9 +162,9 @@ function onDrop(source, target) {
         } else if (medium) {
             window.setTimeout(makeMediumMove, 20)
         } else if (hard) {
-            window.setTimeout(makeHardMove, 20);
+            makeHardMove();
         } else if (grandmaster) {
-            // makeGrandmasterMove('8/7p/6pk/1R6/p1BPP3/P6P/KPP5/2n2r2 w - - 3 37');
+            makeGrandmasterMove();
         }
     } else {
         var turn = game.turn();
@@ -341,6 +357,7 @@ function setButtons() {
     $('#playground').on('click', function () {
         playingPuzzle = false;
         document.getElementById('ai').innerHTML = ' ';
+        console.log(document.getElementById('startBtn').innerHTML);
         document.getElementById('ai').classList.add('gameMode');
         document.getElementById('gameBtns').classList.add('pgMode');
         config = {
@@ -397,11 +414,11 @@ function checkOff() {
 
 function displayGameOver() {
     if (game.in_checkmate()) {
-        if (turn == "b") {
+        if (turn === 'w') {
             document.getElementById('level').innerHTML = 'WHITE WINS';
             document.getElementById('level').classList.add('over');
-        } else {
-            document.getElementById('level').innerHTML = 'WHITE WINS';
+        } else if (turn === 'w') {
+            document.getElementById('level').innerHTML = 'BLACK WINS';
             document.getElementById('level').classList.add('over');
         }
     } else if (game.in_threefold_repetition()) {
@@ -413,6 +430,10 @@ function displayGameOver() {
     } else if (game.insufficient_material()) {
         document.getElementById('level').innerHTML = 'INSUFFICIENT MATERIAL';
         document.getElementById('level').classList.add('over');
+    }
+
+    if (game.game_over() && grandmaster) {
+        gameReview();
     }
 }
 
@@ -468,7 +489,7 @@ function setPuzzle(puzzle) {
 
 async function getBestMove() {
     try {
-        const response = await fetch("https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR ", {
+        const response = await fetch(`https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=${game.fen()} `, {
             method: 'POST',
             headers: {
                 'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
@@ -476,17 +497,51 @@ async function getBestMove() {
             }
         });
 
-        if (response) {
+        if (response.ok) {
             const result = await response.json();
-            console.log(result);
+            bestMovesWhite.push(result.ponder);
+            move = result.bestmove;
         }
     } catch (err) {
         console.error(err);
     }
 }
-getBestMove();
+
+async function getHardMove() {
+    const url = 'https://chess-move-maker.p.rapidapi.com/chess';
+    const options = {
+        method: 'POST',
+        headers: {
+            'content-type': 'application/json',
+            'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
+            'X-RapidAPI-Host': 'chess-move-maker.p.rapidapi.com'
+        },
+        body: {
+            color: 'BLACK',
+            positions: game.ascii(),
+        }
+    };
+
+    try {
+        hardMove = await fetch(url, options);
+        console.log(hardMove);
+    } catch (error) {
+        console.error(error);
+    }
+}
 
 
-
+function gameReview() {
+    whiteMoves = game.history({ verbose: true });
+    for (let i = 0; i < bestMovesWhite.length; i++) {
+        var whiteMove = whiteMoves[i].from + whiteMoves[i].to;
+        if (bestMovesWhite[i] == whiteMove) {
+            console.log("On move ", i, " you played the right move");
+        } else {
+            console.log("On move ", i, " you should have played ", bestMovesWhite
+            [i])
+        }
+    }
+}
 
 
