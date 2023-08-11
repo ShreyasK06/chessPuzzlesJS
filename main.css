@@ -99,6 +99,7 @@ a:hover {
 }
 
 #aiContent {
+    margin-top: 0px;
     font-size: 15px;
     display: none;
     position: absolute;
@@ -109,16 +110,16 @@ a:hover {
 }
 
 #ai:hover #aiContent {
-    margin-right: 700px;
+    margin-right: 0px;
     display: block;
-    width: 550px;
-    margin-bottom: 100px;
+    width: 250px;
+    margin-bottom: 0px;
     border-radius: 10px;
 }
 
-#ai:hover {
+/* #ai:hover {
     color: transparent;
-}
+} */
 
 button :active {
     transform: translateY(3px);
