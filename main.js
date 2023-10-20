@@ -1,4 +1,4 @@
-
+    
 var board = null
 var game = Chess();
 var whiteSquareGrey = '#a9a9a9'
