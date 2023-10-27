@@ -432,30 +432,33 @@ function displayGameOver() {
         document.getElementById('level').classList.add('over');
     }
 
-    if (game.game_over() && grandmaster) {
-        gameReview();
+    if (game.in_checkmate() || game.insufficient_material()) {
+        if(grandmaster){
+            console.log("game over");
+            gameReview();
+        }
     }
 }
 
 async function getPuzzles() {
-    // const apiUrl = 'https://chess-puzzles.p.rapidapi.com/?count=1&themes=["endgame"]&rating=1500&playerMoves=4';
-    // const options = {
-    //     method: 'GET',
-    //     headers: {
-    //         'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
-    //         'X-RapidAPI-Host': 'chess-puzzles.p.rapidapi.com'
-    //     }
-    // };
-    // try {    
-    //     const response = await fetch(apiUrl, options)
-    //     puzzle = await response.json();
-    //     console.log(puzzle);
-    //     puzzleMoves = puzzle.puzzles[0].moves;
+    const apiUrl = 'https://chess-puzzles.p.rapidapi.com/?count=1&themes=["middlegame","advantage"]&rating=1500&playerMoves=4';
+    const options = {
+        method: 'GET',
+        headers: {
+            'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
+            'X-RapidAPI-Host': 'chess-puzzles.p.rapidapi.com'
+        }
+    };
+    try {    
+        const response = await fetch(apiUrl, options)
+        puzzle = await response.json();
+        console.log(puzzle);
+        puzzleMoves = puzzle.puzzles[0].moves;
 
-    // } catch (error) {
-    //     console.log(error);
-    // }
-    setPuzzle('8/7p/6pk/1R6/p1BPP3/P6P/KPP5/2n2r2 w - - 3 37');
+    } catch (error) {
+        console.log(error);
+    }
+    setPuzzle(puzzle.puzzles[0].fen);
     document.getElementById('startBtn').innerHTML = "New Puzzle";
 
 }
@@ -464,18 +467,20 @@ function setPuzzle(puzzle) {
     puzzleMovesMade = 0;
     position = puzzle;
     game.load(position);
-    // turn = game.turn();
-    // var from = puzzleMoves[0].substring(0, 2);
-    // var to = puzzleMoves[0].substring(2, 4);
-    // var queen = 'p';
-    // if (puzzleMoves[0].length == 5) {
-    //     queen = puzzleMoves[0].substring(4, 5);
-    // }
-    // if (queen === 'p') {
-    //     game.move({ from: from, to: to });
-    // } else {
-    //     game.move({ from: from, to: to, promotion: queen });
-    // }
+    board.position(position);
+    console.log(position);
+    turn = game.turn();
+    var from = puzzleMoves[0].substring(0, 2);
+    var to = puzzleMoves[0].substring(2, 4);
+    var queen = 'p';
+    if (puzzleMoves[0].length == 5) {
+        queen = puzzleMoves[0].substring(4, 5);
+    }
+    if (queen === 'p') {
+        game.move({ from: from, to: to });
+    } else {
+        game.move({ from: from, to: to, promotion: queen });
+    }
     turn = game.turn();
     console.log(puzzleMovesMade);
     board.position(game.fen());
