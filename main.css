@@ -38,6 +38,10 @@ h3 {
     border-radius: 10px;
     background-color: whitesmoke;
     display: block;
+    position: fixed;
+    top: 15%;
+    right: 38%;
+
 }
 
 
@@ -53,9 +57,7 @@ a:hover {
     width: 200px;
 }
 
-.over {
-    border: 6px solid black;
-}
+
 
 .on {
     background-color: #04AA6D;
@@ -66,13 +68,28 @@ a:hover {
 }
 
 .pgMode {
-    margin-top: 100px;
+    margin-top: 90px;
+}
+
+.pgL {
+    top: 0%;
+}
+
+.pgB {
+    margin-top: 20px;
 }
 
 .gameMode {
-    margin-bottom: 0px;
+    visibility: hidden;
 }
 
+.gameModes {
+    margin-top: 30px;
+}
+
+.normal {
+    visibility: visible;
+}
 
 
 
@@ -90,36 +107,35 @@ a:hover {
 }
 
 #ai {
+    top: 10%;
     width: 30px;
     height: 30px;
     font-size: 30px;
-    margin-left: auto;
-    margin-right: auto;
     display: inline-block;
 }
 
 #aiContent {
+    margin-right: 10px;
     margin-top: 0px;
     font-size: 15px;
     display: none;
-    position: absolute;
-    background-color: transparent;
     box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
     padding: 12px 16px;
     z-index: 1;
 }
 
 #ai:hover #aiContent {
-    margin-right: 0px;
     display: block;
+    position: fixed;
+    top: 12%;
+    right: 39%;
     width: 250px;
-    margin-bottom: 0px;
     border-radius: 10px;
 }
 
-/* #ai:hover {
+#ai:hover {
     color: transparent;
-} */
+}
 
 button :active {
     transform: translateY(3px);
@@ -133,7 +149,7 @@ button {
 #board {
     width: 405px;
     height: 425px;
-    margin-top: 30px;
+    margin-top: 20px;
     margin-left: auto;
     margin-right: auto;
     display: block;
@@ -149,7 +165,7 @@ button {
 
 #mySidenav button {
     position: absolute;
-    right: -38px;
+    right: -30%;
     margin-right: 0px;
     transition: 0.3s;
     height: 80px;
@@ -161,37 +177,37 @@ button {
 }
 
 #mySidenav button:hover {
-    right: 30px;
+    right: -20%;
 }
 
 
 #ruyLopez {
-    top: 35px;
+    top: 25px;
     background-color: #04AA6D;
 }
 
 #italian {
-    top: 120px;
+    top: 110px;
     background-color: #2196F3;
 }
 
 #french {
-    top: 205px;
+    top: 195px;
     background-color: #f44336;
 }
 
 #queens {
-    top: 290px;
+    top: 280px;
     background-color: #00f0a8;
 }
 
 #english {
-    top: 375px;
+    top: 365px;
     background-color: #ED7014;
 }
 
 #sicilian {
-    top: 460px;
+    top: 450px;
     background-color: #FFFD37;
 }
 
@@ -205,7 +221,7 @@ button {
 
 #myLeftnav button {
     position: absolute;
-    left: -38px;
+    left: -30%;
     margin-right: 0px;
     transition: 0.3s;
     height: 80px;
@@ -217,25 +233,25 @@ button {
 }
 
 #myLeftnav button:hover {
-    left: 30px;
+    left: -20%;
 }
 
 #puzzle {
-    top: 135px;
+    top: 100px;
     background-color: #04AA6D;
 }
 
 #chess960 {
-    top: 220px;
+    top: 185px;
     background-color: #2196F3;
 }
 
 #playground {
-    top: 305px;
+    top: 270px;
     background-color: #f44336;
 }
 
 #traditional {
-    top: 390px;
+    top: 355px;
     background-color: #FFFD37;
 }

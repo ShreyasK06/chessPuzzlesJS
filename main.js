@@ -1,4 +1,4 @@
-    
+
 var board = null
 var game = Chess();
 var whiteSquareGrey = '#a9a9a9'
@@ -19,6 +19,9 @@ let receivedMove = false;
 let move;
 let bestMovesWhite = [];
 let whiteMoves = [];
+let puzzleCount = 0;
+let maxPuzzleMoves = 0;
+
 
 function removeGreySquares() {
     $('#board .square-55d63').css('background', '')
@@ -58,32 +61,7 @@ function makeRandomMove() {
     board.position(game.fen())
 }
 
-function makePuzzleMove() {
-    var from = puzzleMoves[puzzleMovesMade].substring(0, 2);
-    var to = puzzleMoves[puzzleMovesMade].substring(2, 4);
-    var queen = 'p';
-    if (puzzleMoves[puzzleMovesMade].length == 5) {
-        queen = puzzleMoves[puzzleMovesMade].substring(4, 5);
-    }
-    console.log(puzzleMovesMade);
-    if (queen === 'p') {
-        game.move({ from: from, to: to });
-    } else {
-        game.move({ from: from, to: to, promotion: queen });
-    }
-    board.position(game.fen());
-    if (puzzleMovesMade != 7) {
-        puzzleMovesMade++;
-    }
 
-
-    if (game.turn == 'b') {
-        document.getElementById('level').innerHTML = 'Black To Move';
-    } else {
-        document.getElementById('level').innerHTML = 'White  To Move';
-    }
-
-}
 
 
 
@@ -140,6 +118,7 @@ async function makeGrandmasterMove() {
         }
         makeGrandmasterMove();
     }
+    displayGameOver();
 
 }
 
@@ -167,7 +146,6 @@ function onDrop(source, target) {
             makeGrandmasterMove();
         }
     } else {
-        var turn = game.turn();
         gamePos = game.fen();
         var move = game.move({
             from: source,
@@ -179,10 +157,19 @@ function onDrop(source, target) {
         console.log(puzzleMoves[puzzleMovesMade]);
         if (Actmove === puzzleMoves[puzzleMovesMade]) {
             puzzleMovesMade++;
-            makePuzzleMove();
+            if (puzzleMovesMade === maxPuzzleMoves) {
+                document.getElementById('level').innerHTML = 'Puzzle Solved';
+                document.getElementById('startBtn').innerHTML = "New Puzzle";
+            } else {
+                makePuzzleMove();
+            }
         } else {
             game.undo();
             return 'snapback'
+        }
+        if (puzzleMovesMade === maxPuzzleMoves) {
+            document.getElementById('level').innerHTML = 'Puzzle Solved';
+            document.getElementById('startBtn').innerHTML = "New Puzzle";
         }
     }
 }
@@ -216,7 +203,6 @@ function onSnapEnd() {
     displayGameOver();
 }
 
-
 var config = {
     draggable: true,
     position: position,
@@ -226,6 +212,8 @@ var config = {
     onMouseoverSquare: onMouseoverSquare,
     onSnapEnd: onSnapEnd
 }
+
+
 board = Chessboard('board', config)
 setButtons();
 
@@ -242,6 +230,7 @@ function setButtons() {
             console.log('Playing Puzzle')
             getPuzzles();
         } else {
+            gameVisualReset();
             board.start()
             game.reset();
             document.getElementById('level').innerHTML = '';
@@ -294,71 +283,72 @@ function setButtons() {
     });
 
     $('#easy').on('click', function () {
-        if (easy) {
-            easy = false;
+        gameModeDefaults();
+        if (!easy) {
+            easy = true;
             document.getElementById('easy').classList.remove('on');
             document.getElementById('easy').classList.add('off');
-            checkOff()
+            switchBtnMode('easy')
         } else {
-            easy = true;
-            switchBtnMode('grandmaster', 'hard', 'medium', 'easy');
-
+            gameReset();
+            easy = false;
         }
     })
 
     $('#medium').on('click', function () {
-        if (medium) {
-            medium = false;
+        gameModeDefaults();
+        if (!medium) {
+            medium = true;
             document.getElementById('medium').classList.remove('on');
             document.getElementById('medium').classList.add('off');
-            checkOff()
+            switchBtnMode('medium')
         } else {
-            medium = true;
-            switchBtnMode('grandmaster', 'hard', 'easy', 'medium');
+            gameReset();
+            medium = false;
         }
     })
 
     $('#hard').on('click', function () {
-        if (hard) {
-            hard = false;
+        gameModeDefaults();
+        if (!hard) {
+            hard = true;
             document.getElementById('hard').classList.remove('on');
             document.getElementById('hard').classList.add('off');
-            checkOff()
+            switchBtnMode('hard')
         } else {
-            hard = true;
-            switchBtnMode('grandmaster', 'medium', 'easy', 'hard');
+            gameReset();
+            hard = false;
         }
     })
 
     $('#grandmaster').on('click', function () {
-        if (grandmaster) {
-            grandmaster = false;
+        gameModeDefaults();
+        if (!grandmaster) {
+            grandmaster = true;
             document.getElementById('grandmaster').classList.remove('on');
             document.getElementById('grandmaster').classList.add('off');
-            checkOff()
+            switchBtnMode('grandmaster')
         } else {
-            grandmaster = true;
-            switchBtnMode('hard', 'medium', 'easy', 'grandmaster');
+            gameReset();
+            grandmaster = false;
         }
     })
 
     $('#puzzle').on('click', function () {
-        document.getElementById('ai').innerHTML = ' ';
-        document.getElementById('ai').classList.add('gameMode');
+        gameModeDefaults();
         playingPuzzle = true;
         getPuzzles();
     })
 
     $('#chess960').on('click', function () {
-        document.getElementById('ai').innerHTML = ' ';
-        document.getElementById('ai').classList.add('gameMode');
+        gameModeDefaults();
     })
 
     $('#playground').on('click', function () {
         playingPuzzle = false;
-        document.getElementById('ai').innerHTML = ' ';
-        console.log(document.getElementById('startBtn').innerHTML);
         document.getElementById('ai').classList.add('gameMode');
+        document.getElementById('level').classList.add('pgModeL');
+        document.getElementById('board').classList.add('pgModeB');
         document.getElementById('gameBtns').classList.add('pgMode');
         config = {
             draggable: true,
@@ -370,39 +360,51 @@ function setButtons() {
     });
 
     $('#traditional').on('click', function () {
-        playingPuzzle = false;
-        document.getElementById('ai').innerHTML = '🤖';
-        document.getElementById('ai').classList.remove('gameMode');
-        document.getElementById('gameBtns').classList.remove('pgMode');
-        config = {
-            draggable: true,
-            position: position,
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onMouseoutSquare: onMouseoutSquare,
-            onMouseoverSquare: onMouseoverSquare,
-            onSnapEnd: onSnapEnd
-        }
-        board = Chessboard('board', config)
-        board.start();
-        game.reset();
+        gameVisualReset();
+        gameReset();
     });
 }
 
-function switchBtnMode(on1, on2, on3, off1) {
-    document.getElementById(on1).classList.remove('on');
-    document.getElementById(on1).classList.add('off');
-    document.getElementById(on2).classList.remove('on');
-    document.getElementById(on2).classList.add('off');
-    document.getElementById(on3).classList.remove('on');
-    document.getElementById(on3).classList.add('off');
-    document.getElementById(on3).classList.remove('on');
-    document.getElementById(on3).classList.add('off');
-    document.getElementById(off1).classList.add('on');
-    document.getElementById(off1).classList.remove('off');
+function gameModeDefaults() {
+    document.getElementById('ai').classList.add('gameMode');
+    document.getElementById('board').classList.add('gameModes');
+    document.getElementById('level').classList.remove('normal');
+}
 
-    document.getElementById('level').innerHTML = off1.toUpperCase() + ' LEVEL';
-    document.getElementById('level').classList.add('over');
+function gameReset() {
+    playingPuzzle = false;
+    config = {
+        draggable: true,
+        position: position,
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onMouseoutSquare: onMouseoutSquare,
+        onMouseoverSquare: onMouseoverSquare,
+        onSnapEnd: onSnapEnd
+    }
+    board = Chessboard('board', config)
+    board.start();
+    game.reset();
+}
+
+function gameVisualReset() {
+    document.getElementById('board').classList.remove('gameModes');
+    document.getElementById('level').classList.add('normal');
+    document.getElementById('ai').classList.remove('gameMode');
+    if (document.getElementById('gameBtns').classList.contains('pgMode')) {
+        document.getElementById('gameBtns').classList.remove('pgMode');
+    }
+}
+
+
+function switchBtnMode(a) {
+    level = ['easy', 'medium', 'hard', 'grandmaster'];
+    level.splice(level.indexOf(a))
+    for (let i = 0; i < level.length; i++) {
+        document.getElementById(level[i]).classList.remove('on');
+        document.getElementById(level[i]).classList.add('off');
+    }
+    document.getElementById('level').innerHTML = a.toUpperCase() + ' LEVEL';
 }
 
 function checkOff() {
@@ -414,82 +416,30 @@ function checkOff() {
 
 function displayGameOver() {
     if (game.in_checkmate()) {
-        if (turn === 'w') {
-            document.getElementById('level').innerHTML = 'WHITE WINS';
-            document.getElementById('level').classList.add('over');
-        } else if (turn === 'w') {
+        if (game.turn() === 'w') {
             document.getElementById('level').innerHTML = 'BLACK WINS';
-            document.getElementById('level').classList.add('over');
+        } else {
+            document.getElementById('level').innerHTML = 'WHITE WINS';
         }
+        document.getElementById('level').classList.remove('normal');
+
     } else if (game.in_threefold_repetition()) {
         document.getElementById('level').innerHTML = 'THREEFOLD REPETITION';
-        document.getElementById('level').classList.add('over');
+        document.getElementById('level').classList.remove('normal');
     } else if (game.in_stalemate()) {
         document.getElementById('level').innerHTML = 'STALEMATE';
-        document.getElementById('level').classList.add('over');
+        document.getElementById('level').classList.remove('normal');
     } else if (game.insufficient_material()) {
         document.getElementById('level').innerHTML = 'INSUFFICIENT MATERIAL';
-        document.getElementById('level').classList.add('over');
+        document.getElementById('level').classList.remove('normal');
     }
 
-    if (game.in_checkmate() || game.insufficient_material()) {
-        if(grandmaster){
+    if (game.in_checkmate() || game.insufficient_material() || game.in_stalemate() || game.in_threefold_repetition()) {
+        if (grandmaster) {
             console.log("game over");
             gameReview();
         }
     }
-}
-
-async function getPuzzles() {
-    const apiUrl = 'https://chess-puzzles.p.rapidapi.com/?count=1&themes=["middlegame","advantage"]&rating=1500&playerMoves=4';
-    const options = {
-        method: 'GET',
-        headers: {
-            'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
-            'X-RapidAPI-Host': 'chess-puzzles.p.rapidapi.com'
-        }
-    };
-    try {    
-        const response = await fetch(apiUrl, options)
-        puzzle = await response.json();
-        console.log(puzzle);
-        puzzleMoves = puzzle.puzzles[0].moves;
-
-    } catch (error) {
-        console.log(error);
-    }
-    setPuzzle(puzzle.puzzles[0].fen);
-    document.getElementById('startBtn').innerHTML = "New Puzzle";
-
-}
-
-function setPuzzle(puzzle) {
-    puzzleMovesMade = 0;
-    position = puzzle;
-    game.load(position);
-    board.position(position);
-    console.log(position);
-    turn = game.turn();
-    var from = puzzleMoves[0].substring(0, 2);
-    var to = puzzleMoves[0].substring(2, 4);
-    var queen = 'p';
-    if (puzzleMoves[0].length == 5) {
-        queen = puzzleMoves[0].substring(4, 5);
-    }
-    if (queen === 'p') {
-        game.move({ from: from, to: to });
-    } else {
-        game.move({ from: from, to: to, promotion: queen });
-    }
-    turn = game.turn();
-    console.log(puzzleMovesMade);
-    board.position(game.fen());
-    if (game.turn() == 'b') {
-        document.getElementById('level').innerHTML = 'Black To Move';
-    } else {
-        document.getElementById('level').innerHTML = 'White  To Move';
-    }
-    puzzleMovesMade++;
 }
 
 async function getBestMove() {
@@ -549,4 +499,85 @@ function gameReview() {
     }
 }
 
+async function getPuzzles() {
+    const apiUrl = 'https://chess-puzzles.p.rapidapi.com/?themes=%5B%22middlegame%22%2C%22advantage%22%5D&rating=1500&themesType=ALL&playerMoves=4&count=25';
+    const options = {
+        method: 'GET',
+        headers: {
+            'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
+            'X-RapidAPI-Host': 'chess-puzzles.p.rapidapi.com'
+        }
+    };
+    try {
+        const response = await fetch(apiUrl, options)
+        puzzle = await response.json();
+        puzzleMoves = puzzle.puzzles[puzzleCount].moves;
+        maxPuzzleMoves = puzzleMoves.length;
+        console.log(puzzleMoves);
 
+    } catch (error) {
+        console.log(error);
+    }
+    setPuzzle(puzzle.puzzles[puzzleCount].fen);
+    puzzleCount++;
+    document.getElementById('startBtn').innerHTML = "New Puzzle";
+
+}
+
+function setPuzzle(puzzle) {
+    console.log(puzzle);
+    puzzleMovesMade = 0;
+    game.load(puzzle);
+    board.position(puzzle);
+    turn = game.turn();
+    var from = puzzleMoves[0].substring(0, 2);
+    var to = puzzleMoves[0].substring(2, 4);
+    var queen = 'p';
+    if (puzzleMoves[0].length == 5) {
+        queen = puzzleMoves[0].substring(4, 5);
+    }
+    if (queen === 'p') {
+        game.move({ from: from, to: to });
+    } else {
+        game.move({ from: from, to: to, promotion: queen });
+    }
+    turn = game.turn();
+    console.log(puzzleMovesMade);
+    board.position(game.fen());
+    if (game.turn() == 'b') {
+        document.getElementById('level').innerHTML = 'Black To Move';
+    } else {
+        document.getElementById('level').innerHTML = 'White  To Move';
+    }
+    puzzleMovesMade++;
+}
+
+function makePuzzleMove() {
+    var from = puzzleMoves[puzzleMovesMade].substring(0, 2);
+    var to = puzzleMoves[puzzleMovesMade].substring(2, 4);
+    var queen = 'p';
+    if (puzzleMoves[puzzleMovesMade].length == 5) {
+        queen = puzzleMoves[puzzleMovesMade].substring(4, 5);
+    }
+    console.log(puzzleMovesMade);
+    if (queen === 'p') {
+        game.move({ from: from, to: to });
+    } else {
+        game.move({ from: from, to: to, promotion: queen });
+    }
+    board.position(game.fen());
+    if (puzzleMovesMade != maxPuzzleMoves) {
+        puzzleMovesMade++;
+    } else {
+        document.getElementById('level').innerHTML = 'Puzzle Solved';
+        document.getElementById('startBtn').innerHTML = "New Puzzle";
+    }
+
+
+    if (game.turn == 'b') {
+        document.getElementById('level').innerHTML = 'Black To Move';
+    } else {
+        document.getElementById('level').innerHTML = 'White  To Move';
+    }
+
+}
