@@ -73,12 +73,24 @@ function initTwoPlayerMode() {
             document.getElementById('ai').classList.add('gameMode'); // Hide AI difficulty dropdown
             document.getElementById('gameState').innerHTML = 'Two-Player Mode';
             document.getElementById('level').innerHTML = getCurrentTurnText();
+
+            // Make sure traditional button is selected if no other mode is selected
+            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                clearSelectedModes();
+                $('#traditional').addClass('selected');
+            }
+
             updateGameInfo();
         } else {
             // Switch back to AI mode
             document.getElementById('ai').classList.remove('gameMode'); // Show AI difficulty dropdown
-            document.getElementById('gameState').innerHTML = 'Choose Game Mode';
-            document.getElementById('level').innerHTML = 'Select a game mode from the left';
+            document.getElementById('gameState').innerHTML = 'Traditional Chess';
+            document.getElementById('level').innerHTML = 'Select a difficulty level';
+
+            // Make sure traditional button is selected
+            clearSelectedModes();
+            $('#traditional').addClass('selected');
+
             updateGameInfo();
         }
     });
@@ -886,8 +898,13 @@ function gameReset() {
         document.getElementById('gameState').innerHTML = 'New Game';
         document.getElementById('level').innerHTML = getAILevelText();
     } else {
-        document.getElementById('gameState').innerHTML = 'New Game';
+        // Default to traditional mode
+        document.getElementById('gameState').innerHTML = 'Traditional Chess';
         document.getElementById('level').innerHTML = 'Select a difficulty level';
+
+        // Make sure traditional button is selected
+        clearSelectedModes();
+        $('#traditional').addClass('selected');
     }
 
     updateMoveHistory();
@@ -1458,14 +1475,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize two-player mode
     initTwoPlayerMode();
 
-    // Set default messages
-    if (document.getElementById('gameState').innerHTML === '') {
-        document.getElementById('gameState').innerHTML = 'Choose a Game Mode';
-    }
-
-    if (document.getElementById('level').innerHTML === '') {
-        document.getElementById('level').innerHTML = 'Select from the options on the left';
-    }
+    // Set traditional mode as default
+    $('#traditional').addClass('selected');
+    document.getElementById('gameState').innerHTML = 'Traditional Chess';
+    document.getElementById('level').innerHTML = twoPlayerMode ?
+        getCurrentTurnText() : 'Select a difficulty level';
 
     // Update initial game info
     updateGameInfo();
