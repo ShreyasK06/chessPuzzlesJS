@@ -194,46 +194,104 @@ function makeMediumMove() {
     }, 800);
 }
 
-async function makeHardMove() {
+function makeHardMove() {
     toggleLoading(true);
 
-    try {
-        await getHardMove();
-        if (!hardMove) {
-            // Fallback to medium move if API fails
-            console.error('Hard move API failed, falling back to medium move');
+    setTimeout(() => {
+        try {
+            // Get all possible moves
+            const possibleMoves = game.moves({ verbose: true });
+            if (possibleMoves.length === 0) {
+                toggleLoading(false);
+                return;
+            }
+
+            // Assign scores to moves based on piece values and position
+            const scoredMoves = possibleMoves.map(move => {
+                let score = 0;
+
+                // Base score for captures based on piece values
+                if (move.captured) {
+                    const pieceValues = {
+                        'p': 1,   // pawn
+                        'n': 3,   // knight
+                        'b': 3.5, // bishop
+                        'r': 5,   // rook
+                        'q': 9,   // queen
+                        'k': 100  // king (not actually capturable in legal chess)
+                    };
+                    score += pieceValues[move.captured] * 10;
+                }
+
+                // Bonus for checks
+                if (move.san.includes('+')) {
+                    score += 5;
+                }
+
+                // Bonus for checkmate
+                if (move.san.includes('#')) {
+                    score += 1000;
+                }
+
+                // Bonus for promotion
+                if (move.promotion) {
+                    const promotionValues = {
+                        'q': 9,  // queen
+                        'r': 5,  // rook
+                        'b': 3,  // bishop
+                        'n': 3   // knight
+                    };
+                    score += promotionValues[move.promotion] * 8;
+                }
+
+                // Bonus for controlling center squares
+                const centerSquares = ['d4', 'd5', 'e4', 'e5'];
+                if (centerSquares.includes(move.to)) {
+                    score += 2;
+                }
+
+                // Bonus for developing pieces in opening
+                if (game.history().length < 10) {
+                    // Encourage knight and bishop development
+                    if ((move.piece === 'n' || move.piece === 'b') &&
+                        move.from.charAt(1) === (move.color === 'w' ? '1' : '8') &&
+                        move.to.charAt(1) !== (move.color === 'w' ? '1' : '8')) {
+                        score += 3;
+                    }
+
+                    // Encourage pawn moves to control center
+                    if (move.piece === 'p' && centerSquares.includes(move.to)) {
+                        score += 2;
+                    }
+                }
+
+                // Add some randomness to make play less predictable
+                score += Math.random() * 2;
+
+                return { move, score };
+            });
+
+            // Sort moves by score (highest first)
+            scoredMoves.sort((a, b) => b.score - a.score);
+
+            // Select one of the top moves (not always the best for some unpredictability)
+            const topMoves = scoredMoves.slice(0, Math.min(3, scoredMoves.length));
+            const selectedMoveObj = topMoves[Math.floor(Math.random() * topMoves.length)];
+
+            // Make the selected move
+            game.move(selectedMoveObj.move);
+            board.position(game.fen());
+            displayGameOver();
+            updateMoveHistory();
+            updateGameInfo();
+        } catch (error) {
+            console.error('Error making hard move:', error);
+            // Fallback to medium move if there's an error
             makeMediumMove();
-            return;
+        } finally {
+            toggleLoading(false);
         }
-
-        const from = hardMove.substring(0, 2);
-        const to = hardMove.substring(2, 4);
-        let queen = 'q'; // Default to queen for promotion
-
-        if (hardMove.length === 5) {
-            queen = hardMove.substring(4, 5);
-        }
-
-        const moveResult = game.move({
-            from: from,
-            to: to,
-            promotion: queen
-        });
-
-        if (moveResult === null) {
-            console.error('Invalid move returned from API');
-            makeMediumMove();
-            return;
-        }
-
-        board.position(game.fen());
-        displayGameOver();
-    } catch (error) {
-        console.error('Error making hard move:', error);
-        makeMediumMove();
-    } finally {
-        toggleLoading(false);
-    }
+    }, 1000); // Slightly longer delay to simulate thinking
 }
 
 async function makeGrandmasterMove() {
@@ -314,6 +372,19 @@ function onDrop(source, target) {
 
     if (!playingPuzzle) {
         removeGreySquares();
+
+        // Check if we're in AI mode but no difficulty is selected
+        if (!twoPlayerMode && !easy && !medium && !hard && !grandmaster) {
+            showGameResultModal('Select Difficulty', `
+                <div class="text-center">
+                    <i class="fas fa-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
+                    <p class="mt-3">Please select a difficulty level before playing.</p>
+                    <p>Click on the Difficulty dropdown in the top-right corner.</p>
+                </div>
+            `);
+            return 'snapback';
+        }
+
         // See if the move is legal
         const moveResult = game.move({
             from: source,
@@ -587,17 +658,29 @@ function setButtons() {
         }
     });
 
+    // Helper function to clear selected state from all difficulty buttons
+    function clearSelectedDifficulties() {
+        $('.dropdown-item').removeClass('selected');
+    }
+
     // Difficulty level buttons
     $('#easy').on('click', function () {
         gameModeDefaults();
         if (!easy) {
             resetAllDifficulties();
+            clearSelectedDifficulties();
+            $(this).addClass('selected');
             easy = true;
             switchBtnMode('easy');
             document.getElementById('gameState').innerHTML = 'AI Game - Easy Mode';
+            // Make sure a game mode is selected (default to traditional)
+            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                $('#traditional').addClass('selected');
+            }
         } else {
             gameReset();
             easy = false;
+            $(this).removeClass('selected');
             document.getElementById('gameState').innerHTML = 'Choose Game Mode';
             document.getElementById('level').innerHTML = 'Select a difficulty level';
         }
@@ -608,12 +691,19 @@ function setButtons() {
         gameModeDefaults();
         if (!medium) {
             resetAllDifficulties();
+            clearSelectedDifficulties();
+            $(this).addClass('selected');
             medium = true;
             switchBtnMode('medium');
             document.getElementById('gameState').innerHTML = 'AI Game - Medium Mode';
+            // Make sure a game mode is selected (default to traditional)
+            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                $('#traditional').addClass('selected');
+            }
         } else {
             gameReset();
             medium = false;
+            $(this).removeClass('selected');
             document.getElementById('gameState').innerHTML = 'Choose Game Mode';
             document.getElementById('level').innerHTML = 'Select a difficulty level';
         }
@@ -624,12 +714,19 @@ function setButtons() {
         gameModeDefaults();
         if (!hard) {
             resetAllDifficulties();
+            clearSelectedDifficulties();
+            $(this).addClass('selected');
             hard = true;
             switchBtnMode('hard');
             document.getElementById('gameState').innerHTML = 'AI Game - Hard Mode';
+            // Make sure a game mode is selected (default to traditional)
+            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                $('#traditional').addClass('selected');
+            }
         } else {
             gameReset();
             hard = false;
+            $(this).removeClass('selected');
             document.getElementById('gameState').innerHTML = 'Choose Game Mode';
             document.getElementById('level').innerHTML = 'Select a difficulty level';
         }
@@ -640,20 +737,34 @@ function setButtons() {
         gameModeDefaults();
         if (!grandmaster) {
             resetAllDifficulties();
+            clearSelectedDifficulties();
+            $(this).addClass('selected');
             grandmaster = true;
             switchBtnMode('grandmaster');
             document.getElementById('gameState').innerHTML = 'AI Game - Grandmaster Mode';
+            // Make sure a game mode is selected (default to traditional)
+            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                $('#traditional').addClass('selected');
+            }
         } else {
             gameReset();
             grandmaster = false;
+            $(this).removeClass('selected');
             document.getElementById('gameState').innerHTML = 'Choose Game Mode';
             document.getElementById('level').innerHTML = 'Select a difficulty level';
         }
         updateGameInfo();
     });
 
+    // Helper function to clear selected state from all mode buttons
+    function clearSelectedModes() {
+        $('#myLeftnav .btn, #mySidenav .btn').removeClass('selected');
+    }
+
     // Game mode buttons
     $('#puzzle').on('click', function () {
+        clearSelectedModes();
+        $(this).addClass('selected');
         gameModeDefaults();
         playingPuzzle = true;
         document.getElementById('gameState').innerHTML = 'Daily Puzzle';
@@ -661,6 +772,8 @@ function setButtons() {
     });
 
     $('#chess960').on('click', function () {
+        clearSelectedModes();
+        $(this).addClass('selected');
         gameModeDefaults();
         resetAllDifficulties();
         playingPuzzle = false;
@@ -690,6 +803,8 @@ function setButtons() {
     });
 
     $('#playground').on('click', function () {
+        clearSelectedModes();
+        $(this).addClass('selected');
         playingPuzzle = false;
         resetAllDifficulties();
         document.getElementById('ai').classList.add('gameMode');
@@ -716,6 +831,8 @@ function setButtons() {
     });
 
     $('#traditional').on('click', function () {
+        clearSelectedModes();
+        $(this).addClass('selected');
         gameVisualReset();
         gameReset();
 
@@ -922,40 +1039,8 @@ async function getBestMove() {
     }
 }
 
-// Get hard difficulty move from API
-async function getHardMove() {
-    toggleLoading(true);
-
-    const url = 'https://chess-move-maker.p.rapidapi.com/chess';
-    const options = {
-        method: 'POST',
-        headers: {
-            'content-type': 'application/json',
-            'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
-            'X-RapidAPI-Host': 'chess-move-maker.p.rapidapi.com'
-        },
-        body: JSON.stringify({
-            color: 'BLACK',
-            positions: game.ascii()
-        })
-    };
-
-    try {
-        const response = await fetch(url, options);
-        if (response.ok) {
-            const result = await response.json();
-            hardMove = result.move;
-            return result.move;
-        } else {
-            throw new Error(`API responded with status: ${response.status}`);
-        }
-    } catch (error) {
-        console.error('Error getting hard move:', error);
-        return null;
-    } finally {
-        toggleLoading(false);
-    }
-}
+// Note: We've replaced the API-based hard difficulty with our own implementation
+// that uses a scoring system to evaluate moves.
 
 // Review game moves compared to best moves
 function gameReview() {

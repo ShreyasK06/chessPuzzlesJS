@@ -191,6 +191,8 @@ h2, h3 {
     border-left: 4px solid transparent;
     border-radius: 0 var(--border-radius) var(--border-radius) 0;
     padding: 0.75rem 1rem;
+    position: relative;
+    overflow: hidden;
 }
 
 #mySidenav .btn {
@@ -209,6 +211,36 @@ h2, h3 {
 #mySidenav .btn:hover {
     border-left-color: transparent;
     border-right-color: var(--primary-color);
+}
+
+/* Selected mode styling */
+#myLeftnav .btn.selected, #mySidenav .btn.selected {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+#myLeftnav .btn.selected::after, #mySidenav .btn.selected::after {
+    content: "\f00c";
+    font-family: "Font Awesome\ 5 Free";
+    font-weight: 900;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+#mySidenav .btn.selected::after {
+    right: auto;
+    left: 10px;
+}
+
+/* Difficulty buttons styling */
+.dropdown-item.selected {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
 }
 
 /* Sidebar containers */
