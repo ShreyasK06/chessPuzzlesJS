@@ -1,257 +1,468 @@
-@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+    /* Chess.com inspired color scheme */
+    --primary-color: #7fa650; /* Green */
+    --secondary-color: #4a6f8a; /* Blue */
+    --accent-color: #b58863; /* Brown */
+    --light-color: #f0d9b5; /* Light square */
+    --dark-color: #312e2b; /* Dark background */
+    --board-dark: #b58863; /* Dark square */
+    --board-light: #f0d9b5; /* Light square */
+    --text-color: #262421;
+    --text-light: #f8f9fa;
+    --border-radius: 8px;
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --transition-speed: 0.3s;
+    --header-bg: #312e2b;
+    --sidebar-bg: #272522;
+}
+
+/* Dark Mode Variables */
+[data-theme="dark"] {
+    --primary-color: #7fa650;
+    --secondary-color: #5d81a0;
+    --accent-color: #d88c4a;
+    --light-color: #262421;
+    --dark-color: #1a1a1a;
+    --board-dark: #b58863; /* Keep board colors consistent */
+    --board-light: #f0d9b5;
+    --text-color: #f8f9fa;
+    --text-light: #f8f9fa;
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --header-bg: #1a1a1a;
+    --sidebar-bg: #121212;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
 
 html {
-    box-sizing: border-box;
+    scroll-behavior: smooth;
 }
 
 body {
-    font-family: Rubik, sans-serif;
-    text-align: center;
-    background-color: whitesmoke;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg id='hexagons' fill='%23000000' fill-opacity='0.2' fill-rule='nonzero'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    font-family: 'Noto Sans', sans-serif; /* Chess.com uses Noto Sans */
+    background-color: var(--light-color);
+    color: var(--text-color);
+    transition: background-color var(--transition-speed), color var(--transition-speed);
+    min-height: 100vh;
+    line-height: 1.6;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
 
+/* Header Styles */
+header {
+    background-color: var(--header-bg);
+    color: var(--text-light);
+    box-shadow: var(--box-shadow);
+    padding: 0.75rem 0;
+    border-bottom: 2px solid var(--primary-color);
+}
 
+/* Fix for dark mode toggle label */
+header .form-check-label {
+    color: var(--text-light);
 }
 
 h1 {
-    width: 100vh;
-    border-radius: 10px;
-    background-color: whitesmoke;
-    display: inline-block;
-    border: 6px solid black;
-    margin-left: auto;
+    font-weight: 700;
+    margin: 0;
+    font-size: 2rem;
 }
 
-h2 {
-    width: 100vh;
-    margin-left: auto;
-    margin-right: auto;
-    border-radius: 10px;
-    background-color: whitesmoke;
-    display: block;
+h1 a {
+    color: var(--text-light);
+    text-decoration: none;
+    transition: color var(--transition-speed);
 }
 
-h3 {
-    width: 50vh;
-    margin-left: auto;
-    margin-right: auto;
-    border-radius: 10px;
-    background-color: whitesmoke;
-    display: block;
-    position: fixed;
-    top: 15%;
-    right: 38%;
-
+h1 a:hover {
+    color: var(--secondary-color);
 }
 
-
-a {
-    color: black;
+h2, h3 {
+    color: var(--text-color);
+    transition: color var(--transition-speed);
 }
 
-a:hover {
-    color: black;
+/* Button Styles */
+.btn {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all var(--transition-speed);
+    border: none;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
 }
 
-.op {
-    width: 200px;
+.btn-success {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
+.btn-primary {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
 
+.btn-danger {
+    background-color: #d9534f;
+}
 
+.btn-warning {
+    background-color: #f0ad4e;
+    color: #212529;
+}
+
+.btn-info {
+    background-color: #5bc0de;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--box-shadow);
+    filter: brightness(1.1);
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+/* Chess Board */
+#board {
+    width: 480px;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    border: 8px solid #8d6e63;
+}
+
+/* Custom chess square colors */
+.white-1e1d7 {
+    background-color: var(--board-light) !important;
+}
+
+.black-3c85d {
+    background-color: var(--board-dark) !important;
+}
+
+/* Card Styles */
+.card {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    transition: all var(--transition-speed);
+    background-color: var(--light-color);
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    background-color: var(--header-bg);
+    color: var(--text-light);
+    border-bottom: 2px solid var(--primary-color);
+    padding: 0.75rem 1.25rem;
+    font-weight: 600;
+}
+
+.card-body {
+    padding: 1.5rem;
+    background-color: var(--light-color);
+}
+
+/* Navigation Buttons */
+#myLeftnav, #mySidenav {
+    width: 100%;
+}
+
+#myLeftnav .btn, #mySidenav .btn {
+    width: 100%;
+    margin-bottom: 10px;
+    text-align: left;
+    font-weight: 500;
+    transition: all var(--transition-speed);
+    border-left: 4px solid transparent;
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    padding: 0.75rem 1rem;
+}
+
+#mySidenav .btn {
+    text-align: right;
+    border-right: 4px solid transparent;
+    border-left: none;
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+#myLeftnav .btn:hover, #mySidenav .btn:hover {
+    transform: translateX(0);
+    border-left-color: var(--primary-color);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+#mySidenav .btn:hover {
+    border-left-color: transparent;
+    border-right-color: var(--primary-color);
+}
+
+/* Sidebar containers */
+.sidebar-container {
+    background-color: var(--sidebar-bg);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    height: 100%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Game Status */
+#gameState, #level {
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: var(--primary-color);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    transition: all var(--transition-speed);
+    min-height: 1.5rem; /* Ensure there's always space for text */
+}
+
+#gameState {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+#level {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    padding-bottom: 0.5rem;
+    min-height: 1.2rem; /* Ensure there's always space for text */
+}
+
+/* Loading Indicator */
+#loadingIndicator {
+    margin-top: 20px;
+    color: var(--primary-color);
+}
+
+/* Game Buttons */
+#gameBtns {
+    margin-top: 20px;
+}
+
+#gameBtns .btn {
+    min-width: 140px;
+    font-weight: 600;
+}
+
+/* Modal Styles */
+.modal-content {
+    border-radius: var(--border-radius);
+    border: none;
+    background-color: var(--light-color);
+    color: var(--text-color);
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.modal-header {
+    background-color: var(--header-bg);
+    color: var(--text-light);
+    border-bottom: 2px solid var(--primary-color);
+    padding: 1rem 1.5rem;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    border-top: none;
+    padding: 1rem 1.5rem 1.5rem;
+}
+
+.modal-title {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+/* Chess piece promotion modal */
+.promotion-piece-container {
+    display: flex;
+    justify-content: space-around;
+    margin: 1rem 0;
+}
+
+.promotion-piece {
+    width: 60px;
+    height: 60px;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: all var(--transition-speed);
+}
+
+.promotion-piece:hover {
+    transform: scale(1.1);
+    box-shadow: var(--box-shadow);
+}
+
+/* Utility Classes */
 .on {
-    background-color: #04AA6D;
+    background-color: var(--primary-color);
 }
 
 .off {
-    background-color: #f44336;
+    background-color: var(--accent-color);
 }
 
+.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border-left-color: var(--primary-color) !important;
+}
+
+.gameMode {
+    display: none;
+}
+
+.normal {
+    display: block;
+}
+
+/* Move history styles */
+.move-history {
+    background-color: var(--light-color);
+    color: var(--text-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    height: 300px;
+    overflow-y: auto;
+    margin-top: 1rem;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+    font-family: 'Noto Sans', monospace;
+    font-size: 0.9rem;
+}
+
+.move-row {
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.move-number {
+    width: 30px;
+    color: var(--secondary-color);
+    font-weight: 600;
+}
+
+.move-white, .move-black {
+    flex: 1;
+    padding: 0 0.5rem;
+}
+
+.move-white {
+    color: var(--text-color);
+}
+
+.move-black {
+    color: var(--text-color);
+}
+
+/* Responsive Adjustments */
+@media (max-width: 992px) {
+    #board {
+        width: 400px;
+    }
+
+    .sidebar-container {
+        margin-bottom: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    #board {
+        width: 350px;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    .btn {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    header {
+        padding: 0.5rem 0;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    #board {
+        width: 300px;
+        border-width: 5px;
+    }
+
+    #gameBtns {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    #gameBtns .btn {
+        width: 100%;
+    }
+
+    .card-header {
+        padding: 0.5rem 1rem;
+    }
+
+    .modal-body {
+        padding: 1rem;
+    }
+}
+
+/* Legacy Support */
 .pgMode {
-    margin-top: 90px;
+    margin-top: 20px;
 }
 
 .pgL {
-    top: 0%;
+    position: static;
 }
 
 .pgB {
     margin-top: 20px;
 }
 
-.gameMode {
-    visibility: hidden;
-}
-
 .gameModes {
-    margin-top: 30px;
-}
-
-.normal {
-    visibility: visible;
-}
-
-
-
-
-#startBtn {
-    background-color: #04AA6D;
-}
-
-#undoBtn {
-    background-color: #2196F3;
-}
-
-#redoBtn {
-    background-color: #2196F3;
-}
-
-#ai {
-    top: 10%;
-    width: 30px;
-    height: 30px;
-    font-size: 30px;
-    display: inline-block;
-}
-
-#aiContent {
-    margin-right: 10px;
-    margin-top: 0px;
-    font-size: 15px;
-    display: none;
-    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
-    padding: 12px 16px;
-    z-index: 1;
-}
-
-#ai:hover #aiContent {
-    display: block;
-    position: fixed;
-    top: 12%;
-    right: 39%;
-    width: 250px;
-    border-radius: 10px;
-}
-
-#ai:hover {
-    color: transparent;
-}
-
-button :active {
-    transform: translateY(3px);
-}
-
-button {
-    font-family: Rubik, sans-serif;
-    border-radius: 10px;
-}
-
-#board {
-    width: 405px;
-    height: 425px;
     margin-top: 20px;
-    margin-left: auto;
-    margin-right: auto;
-    display: block;
 }
 
-#mySidenav {
-    width: 40vh;
-    margin-left: 50px;
-    margin-right: 0px;
-    position: relative;
-    display: inline-block;
+/* Toggle styling */
+.form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
-#mySidenav button {
-    position: absolute;
-    right: -30%;
-    margin-right: 0px;
-    transition: 0.3s;
-    height: 80px;
-    width: 150px;
-    font-size: 20px;
-    color: black;
-    border-radius: 5px 0px 0px 5px;
-    margin-bottom: 5px;
+.form-check-input:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(127, 166, 80, 0.25);
 }
 
-#mySidenav button:hover {
-    right: -20%;
+/* Two-player mode toggle */
+#twoPlayerToggle:checked {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
 }
 
-
-#ruyLopez {
-    top: 25px;
-    background-color: #04AA6D;
-}
-
-#italian {
-    top: 110px;
-    background-color: #2196F3;
-}
-
-#french {
-    top: 195px;
-    background-color: #f44336;
-}
-
-#queens {
-    top: 280px;
-    background-color: #00f0a8;
-}
-
-#english {
-    top: 365px;
-    background-color: #ED7014;
-}
-
-#sicilian {
-    top: 450px;
-    background-color: #FFFD37;
-}
-
-#myLeftnav {
-    width: 40vh;
-    margin-right: 50px;
-    margin-left: 0px;
-    position: relative;
-    display: inline-block;
-}
-
-#myLeftnav button {
-    position: absolute;
-    left: -30%;
-    margin-right: 0px;
-    transition: 0.3s;
-    height: 80px;
-    width: 150px;
-    font-size: 20px;
-    color: black;
-    border-radius: 0px 5px 5px 0px;
-    margin-bottom: 5px;
-}
-
-#myLeftnav button:hover {
-    left: -20%;
-}
-
-#puzzle {
-    top: 100px;
-    background-color: #04AA6D;
-}
-
-#chess960 {
-    top: 185px;
-    background-color: #2196F3;
-}
-
-#playground {
-    top: 270px;
-    background-color: #f44336;
-}
-
-#traditional {
-    top: 355px;
-    background-color: #FFFD37;
+#twoPlayerToggle:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 0.25rem rgba(74, 111, 138, 0.25);
 }
