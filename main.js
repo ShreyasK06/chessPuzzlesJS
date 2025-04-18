@@ -122,19 +122,53 @@ function toggleLoading(show) {
 }
 
 // Square highlighting functions
-function removeGreySquares() {
-    $('#board .square-55d63').css('background', '');
+function removeHighlights() {
+    $('#board .square-55d63').removeClass('highlight-square highlight-capture highlight-check');
 }
 
-function greySquare(square) {
+function highlightSquare(square, moveType) {
     const $square = $('#board .square-' + square);
 
-    let background = whiteSquareGrey;
-    if ($square.hasClass('black-3c85d')) {
-        background = blackSquareGrey;
+    // Different highlight styles based on move type
+    if (moveType === 'capture') {
+        $square.addClass('highlight-capture');
+    } else if (moveType === 'check') {
+        $square.addClass('highlight-check');
+    } else {
+        $square.addClass('highlight-square');
     }
+}
 
-    $square.css('background', background);
+// Function to highlight possible moves for a square
+function highlightPossibleMoves(square) {
+    // Get list of possible moves for this square
+    const moves = game.moves({
+        square: square,
+        verbose: true
+    });
+
+    // Exit if there are no moves available for this square
+    if (moves.length === 0) return;
+
+    // Highlight the possible squares for this piece
+    for (const move of moves) {
+        let moveType = 'normal';
+
+        // Check if this is a capture move
+        if (move.captured) {
+            moveType = 'capture';
+        }
+        // Check if this is a check move
+        else if (move.san.includes('+')) {
+            moveType = 'check';
+        }
+        // Check if this is a checkmate move
+        else if (move.san.includes('#')) {
+            moveType = 'check';
+        }
+
+        highlightSquare(move.to, moveType);
+    }
 }
 
 // Chess piece drag start handler
@@ -149,6 +183,13 @@ function onDragStart(source, piece) {
         (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
         return false;
     }
+
+    // Show possible moves when a piece is picked up
+    // First, clear any existing highlights
+    removeHighlights();
+
+    // Highlight possible moves for this piece
+    highlightPossibleMoves(source);
 }
 
 // AI move functions
@@ -383,7 +424,7 @@ function onDrop(source, target) {
     }
 
     if (!playingPuzzle) {
-        removeGreySquares();
+        removeHighlights();
 
         // Check if we're in AI mode but no difficulty is selected
         if (!twoPlayerMode && !easy && !medium && !hard && !grandmaster) {
@@ -437,7 +478,7 @@ function onDrop(source, target) {
         }
     } else {
         // Puzzle mode
-        removeGreySquares();
+        removeHighlights();
 
         // We'll use game.undo() if needed, no need to save position
 
@@ -505,30 +546,18 @@ function onMouseoverSquare(square, _piece) {
     // Don't show moves if we're loading or in a game over state
     if (isLoading || game.game_over()) return;
 
-    // Get list of possible moves for this square
-    const moves = game.moves({
-        square: square,
-        verbose: true
-    });
-
-    // Exit if there are no moves available for this square
-    if (moves.length === 0) return;
-
-    // Highlight the square they moused over
-    greySquare(square);
-
-    // Highlight the possible squares for this piece
-    for (const move of moves) {
-        greySquare(move.to);
-    }
+    // Clear previous highlights and show possible moves for this piece
+    removeHighlights();
+    highlightPossibleMoves(square);
 }
 
 function onMouseoutSquare(_square, _piece) {
-    removeGreySquares();
+    removeHighlights();
 }
 
 function onSnapEnd() {
     board.position(game.fen());
+    removeHighlights();
     displayGameOver();
 }
 
