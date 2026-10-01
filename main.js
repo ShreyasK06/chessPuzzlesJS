@@ -19,10 +19,23 @@ let receivedMove = false;
 let move;
 let bestMovesWhite = [];
 let whiteMoves = [];
+// FEN of the position *before* each human (white) move made in Grandmaster
+// mode, captured in onDrop. Used by gameReview() to ask Stockfish what the
+// human's best move actually was in each of those positions (see getBestMove
+// / gameReview for why this is separate from the AI's own move decisions).
+let preMoveFensWhite = [];
 let puzzleCount = 0;
 let maxPuzzleMoves = 0;
 let isLoading = false;
 let twoPlayerMode = false; // Flag for two-player mode
+
+// RapidAPI key used for the Stockfish and chess-puzzles APIs (Grandmaster
+// mode and Daily Puzzle). This is a static site with no server/build step,
+// so this key is visible to anyone who views source — it provides no real
+// secrecy. It must be rotated in the RapidAPI dashboard, and then either
+// accepted as public (subject to RapidAPI's quota/rate limits on this key)
+// or moved behind a small server-side proxy that holds the real key.
+const RAPIDAPI_KEY = '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3';
 
 // Initialize dark mode from localStorage or system preference
 function initDarkMode() {
@@ -247,104 +260,246 @@ function makeMediumMove() {
     }, 800);
 }
 
+// ----- Hard AI (runs ai.js's negamax search in a Web Worker) -----
+const HARD_AI_DEPTH = 3;
+const HARD_AI_TIME_MS = 1500;
+const HARD_AI_FALLBACK_MS = 5000; // give up waiting on the worker after this long
+
+let hardAiWorker = null;
+let hardAiWorkerFailed = false; // sticky: once true we stop trying to use the worker
+let hardAiRequestSeq = 0;
+let hardAiPendingId = null; // id of the Hard-AI request we still care about, if any
+
+// Lazily create (once) the module-level worker used for Hard AI searches.
+function getHardAiWorker() {
+    if (hardAiWorker || hardAiWorkerFailed) return hardAiWorker;
+
+    try {
+        hardAiWorker = new Worker('ai-worker.js');
+    } catch (err) {
+        // e.g. opened via file:// in some browsers, or Workers unavailable.
+        console.warn('Hard AI: could not create ai-worker.js Worker; falling back to heuristic moves for the rest of this session.', err);
+        hardAiWorkerFailed = true;
+        hardAiWorker = null;
+    }
+
+    return hardAiWorker;
+}
+
+// One-ply heuristic move scoring used by Hard mode (original Hard-mode logic,
+// unchanged) — now also used as the fallback when the search worker can't be
+// used or doesn't answer in time.
+function pickHeuristicMove(possibleMoves) {
+    // Assign scores to moves based on piece values and position
+    const scoredMoves = possibleMoves.map(move => {
+        let score = 0;
+
+        // Base score for captures based on piece values
+        if (move.captured) {
+            const pieceValues = {
+                'p': 1,   // pawn
+                'n': 3,   // knight
+                'b': 3.5, // bishop
+                'r': 5,   // rook
+                'q': 9,   // queen
+                'k': 100  // king (not actually capturable in legal chess)
+            };
+            score += pieceValues[move.captured] * 10;
+        }
+
+        // Bonus for checks
+        if (move.san.includes('+')) {
+            score += 5;
+        }
+
+        // Bonus for checkmate
+        if (move.san.includes('#')) {
+            score += 1000;
+        }
+
+        // Bonus for promotion
+        if (move.promotion) {
+            const promotionValues = {
+                'q': 9,  // queen
+                'r': 5,  // rook
+                'b': 3,  // bishop
+                'n': 3   // knight
+            };
+            score += promotionValues[move.promotion] * 8;
+        }
+
+        // Bonus for controlling center squares
+        const centerSquares = ['d4', 'd5', 'e4', 'e5'];
+        if (centerSquares.includes(move.to)) {
+            score += 2;
+        }
+
+        // Bonus for developing pieces in opening
+        if (game.history().length < 10) {
+            // Encourage knight and bishop development
+            if ((move.piece === 'n' || move.piece === 'b') &&
+                move.from.charAt(1) === (move.color === 'w' ? '1' : '8') &&
+                move.to.charAt(1) !== (move.color === 'w' ? '1' : '8')) {
+                score += 3;
+            }
+
+            // Encourage pawn moves to control center
+            if (move.piece === 'p' && centerSquares.includes(move.to)) {
+                score += 2;
+            }
+        }
+
+        // Add some randomness to make play less predictable
+        score += Math.random() * 2;
+
+        return { move, score };
+    });
+
+    // Sort moves by score (highest first)
+    scoredMoves.sort((a, b) => b.score - a.score);
+
+    // Select one of the top moves (not always the best for some unpredictability)
+    const topMoves = scoredMoves.slice(0, Math.min(3, scoredMoves.length));
+    return topMoves[Math.floor(Math.random() * topMoves.length)].move;
+}
+
+// Apply a move (either a chess.js verbose move object or a {from,to,promotion}
+// short move) and run the same post-move UI updates everywhere Hard AI moves.
+// Returns true if the move was legal and applied.
+function applyHardAiMove(moveInput) {
+    const moveResult = game.move(moveInput);
+    if (moveResult === null) return false;
+
+    board.position(game.fen());
+    displayGameOver();
+    updateMoveHistory();
+    updateGameInfo();
+    return true;
+}
+
 function makeHardMove() {
     toggleLoading(true);
 
-    setTimeout(() => {
-        try {
-            // Get all possible moves
-            const possibleMoves = game.moves({ verbose: true });
-            if (possibleMoves.length === 0) {
-                toggleLoading(false);
-                return;
-            }
+    const possibleMoves = game.moves({ verbose: true });
+    if (possibleMoves.length === 0) {
+        toggleLoading(false);
+        return;
+    }
 
-            // Assign scores to moves based on piece values and position
-            const scoredMoves = possibleMoves.map(move => {
-                let score = 0;
+    const requestFen = game.fen();
+    const requestId = ++hardAiRequestSeq;
 
-                // Base score for captures based on piece values
-                if (move.captured) {
-                    const pieceValues = {
-                        'p': 1,   // pawn
-                        'n': 3,   // knight
-                        'b': 3.5, // bishop
-                        'r': 5,   // rook
-                        'q': 9,   // queen
-                        'k': 100  // king (not actually capturable in legal chess)
-                    };
-                    score += pieceValues[move.captured] * 10;
-                }
+    let settled = false;
+    function finish() {
+        if (settled) return;
+        settled = true;
+        toggleLoading(false);
+    }
 
-                // Bonus for checks
-                if (move.san.includes('+')) {
-                    score += 5;
-                }
+    // Falls back to the one-ply heuristic (then to Medium if even that fails).
+    // Never touches the board if the position has moved on from requestFen
+    // (e.g. the player hit New Game / Undo / switched modes while "thinking").
+    function fallbackToHeuristic(reason, err) {
+        if (settled) return;
+        console.warn('Hard AI: ' + reason + ' — falling back to heuristic move.', err !== undefined ? err : '');
 
-                // Bonus for checkmate
-                if (move.san.includes('#')) {
-                    score += 1000;
-                }
-
-                // Bonus for promotion
-                if (move.promotion) {
-                    const promotionValues = {
-                        'q': 9,  // queen
-                        'r': 5,  // rook
-                        'b': 3,  // bishop
-                        'n': 3   // knight
-                    };
-                    score += promotionValues[move.promotion] * 8;
-                }
-
-                // Bonus for controlling center squares
-                const centerSquares = ['d4', 'd5', 'e4', 'e5'];
-                if (centerSquares.includes(move.to)) {
-                    score += 2;
-                }
-
-                // Bonus for developing pieces in opening
-                if (game.history().length < 10) {
-                    // Encourage knight and bishop development
-                    if ((move.piece === 'n' || move.piece === 'b') &&
-                        move.from.charAt(1) === (move.color === 'w' ? '1' : '8') &&
-                        move.to.charAt(1) !== (move.color === 'w' ? '1' : '8')) {
-                        score += 3;
-                    }
-
-                    // Encourage pawn moves to control center
-                    if (move.piece === 'p' && centerSquares.includes(move.to)) {
-                        score += 2;
-                    }
-                }
-
-                // Add some randomness to make play less predictable
-                score += Math.random() * 2;
-
-                return { move, score };
-            });
-
-            // Sort moves by score (highest first)
-            scoredMoves.sort((a, b) => b.score - a.score);
-
-            // Select one of the top moves (not always the best for some unpredictability)
-            const topMoves = scoredMoves.slice(0, Math.min(3, scoredMoves.length));
-            const selectedMoveObj = topMoves[Math.floor(Math.random() * topMoves.length)];
-
-            // Make the selected move
-            game.move(selectedMoveObj.move);
-            board.position(game.fen());
-            displayGameOver();
-            updateMoveHistory();
-            updateGameInfo();
-        } catch (error) {
-            console.error('Error making hard move:', error);
-            // Fallback to medium move if there's an error
-            makeMediumMove();
-        } finally {
-            toggleLoading(false);
+        if (game.fen() !== requestFen) {
+            // Board changed underneath us; nothing safe to apply.
+            finish();
+            return;
         }
-    }, 1000); // Slightly longer delay to simulate thinking
+
+        try {
+            const fallbackMove = pickHeuristicMove(possibleMoves);
+            if (!applyHardAiMove(fallbackMove)) {
+                throw new Error('heuristic fallback produced an illegal move');
+            }
+        } catch (fallbackErr) {
+            console.error('Hard AI: heuristic fallback also failed; falling back to Medium move.', fallbackErr);
+            settled = true; // makeMediumMove owns its own toggleLoading(false)
+            makeMediumMove();
+            return;
+        }
+
+        finish();
+    }
+
+    if (typeof Worker === 'undefined') {
+        fallbackToHeuristic('Web Workers are not supported in this browser');
+        return;
+    }
+
+    const worker = getHardAiWorker();
+    if (!worker) {
+        fallbackToHeuristic('search worker is unavailable');
+        return;
+    }
+
+    hardAiPendingId = requestId;
+
+    const timeoutHandle = setTimeout(function () {
+        if (hardAiPendingId === requestId) {
+            hardAiPendingId = null;
+            fallbackToHeuristic('no reply from search worker within ' + HARD_AI_FALLBACK_MS + 'ms');
+        }
+    }, HARD_AI_FALLBACK_MS);
+
+    worker.onmessage = function (e) {
+        const data = e.data || {};
+        if (data.id !== requestId || hardAiPendingId !== requestId) return; // stale reply, ignore
+
+        clearTimeout(timeoutHandle);
+        hardAiPendingId = null;
+
+        if (game.fen() !== requestFen) {
+            // Board moved on while the worker was thinking; drop the reply.
+            finish();
+            return;
+        }
+
+        if (!data.ok) {
+            fallbackToHeuristic('search worker reported an error', data.error);
+            return;
+        }
+
+        if (!data.move) {
+            fallbackToHeuristic('search worker returned no move');
+            return;
+        }
+
+        console.debug('Hard AI search: depth=' + data.depth + ' nodes=' + data.nodes + ' timeMs=' + data.timeMs);
+
+        const applied = applyHardAiMove({
+            from: data.move.from,
+            to: data.move.to,
+            promotion: data.move.promotion
+        });
+
+        if (!applied) {
+            fallbackToHeuristic('search worker returned an illegal move (' + data.move.from + data.move.to + ')');
+            return;
+        }
+
+        finish();
+    };
+
+    worker.onerror = function (err) {
+        if (hardAiPendingId !== requestId) return;
+        clearTimeout(timeoutHandle);
+        hardAiPendingId = null;
+        hardAiWorkerFailed = true;
+        try { worker.terminate(); } catch (terminateErr) { /* ignore */ }
+        hardAiWorker = null;
+        fallbackToHeuristic('search worker threw an error', err);
+    };
+
+    try {
+        worker.postMessage({ id: requestId, fen: requestFen, depth: HARD_AI_DEPTH, timeLimitMs: HARD_AI_TIME_MS });
+    } catch (err) {
+        clearTimeout(timeoutHandle);
+        hardAiPendingId = null;
+        fallbackToHeuristic('failed to post message to search worker', err);
+    }
 }
 
 async function makeGrandmasterMove() {
@@ -438,6 +593,14 @@ function onDrop(source, target) {
             return 'snapback';
         }
 
+        // Grandmaster mode: record the pre-move FEN (human is always white,
+        // and this branch only ever fires on the human's turn) so gameReview()
+        // can later ask Stockfish what the best move was FOR THE HUMAN in this
+        // exact position, rather than misusing the AI's own "ponder" data.
+        if (grandmaster && !twoPlayerMode) {
+            preMoveFensWhite.push(game.fen());
+        }
+
         // See if the move is legal
         const moveResult = game.move({
             from: source,
@@ -446,7 +609,12 @@ function onDrop(source, target) {
         });
 
         // Illegal move
-        if (moveResult === null) return 'snapback';
+        if (moveResult === null) {
+            if (grandmaster && !twoPlayerMode) {
+                preMoveFensWhite.pop(); // undo the speculative push above
+            }
+            return 'snapback';
+        }
 
         // Update the board and move history
         board.position(game.fen());
@@ -609,6 +777,7 @@ function setButtons() {
             getPuzzles();
         } else {
             gameVisualReset();
+            resetGrandmasterAnalysisTracking();
             board.start();
             game.reset();
             document.getElementById('level').innerHTML = '';
@@ -817,6 +986,7 @@ function setButtons() {
         $(this).addClass('selected');
         gameModeDefaults();
         resetAllDifficulties();
+        resetGrandmasterAnalysisTracking();
         playingPuzzle = false;
 
         // Generate a random Chess960 position
@@ -904,8 +1074,17 @@ function gameModeDefaults() {
 }
 
 // Reset game to starting position
+// Clear the Grandmaster-mode game-analysis tracking (pre-move FENs and the
+// last review's results) so a fresh game never gets analyzed against
+// leftover data from a previous, possibly-abandoned game.
+function resetGrandmasterAnalysisTracking() {
+    preMoveFensWhite = [];
+    bestMovesWhite = [];
+}
+
 function gameReset() {
     playingPuzzle = false;
+    resetGrandmasterAnalysisTracking();
     const resetConfig = {
         draggable: true,
         position: position,
@@ -1054,24 +1233,26 @@ function displayGameOver() {
     }
 }
 
-// Get best move from Stockfish API
+// Get best move from Stockfish API for the AI's own (current) move decision.
 async function getBestMove() {
     toggleLoading(true);
 
     try {
-        const response = await fetch(`https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=${game.fen()} `, {
+        const response = await fetch(`https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=${encodeURIComponent(game.fen())}`, {
             method: 'POST',
             headers: {
-                'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
                 'X-RapidAPI-Host': 'chess-stockfish-16-api.p.rapidapi.com'
             }
         });
 
         if (response.ok) {
             const result = await response.json();
-            if (result.ponder) {
-                bestMovesWhite.push(result.ponder);
-            }
+            // Note: result.ponder is Stockfish's predicted reply for the side
+            // that is NOT on move here (i.e. a guess at the human's *next*
+            // move) — it is not an evaluation of any move already played, so
+            // it must not be used for the post-game analysis (see
+            // fetchBestMoveForFen / gameReview below for that).
             move = result.bestmove;
             return result.bestmove;
         } else {
@@ -1088,20 +1269,74 @@ async function getBestMove() {
 // Note: We've replaced the API-based hard difficulty with our own implementation
 // that uses a scoring system to evaluate moves.
 
-// Review game moves compared to best moves
-function gameReview() {
-    whiteMoves = game.history({ verbose: true });
+// Ask Stockfish for the best move in an arbitrary position (used by
+// gameReview() to evaluate each of the human's past positions). Separate
+// from getBestMove() because that function also has the side effect of
+// setting the module-level `move` used to drive the AI's own move.
+async function fetchBestMoveForFen(fen) {
+    try {
+        const response = await fetch(`https://chess-stockfish-16-api.p.rapidapi.com/chess/api?fen=${encodeURIComponent(fen)}`, {
+            method: 'POST',
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'chess-stockfish-16-api.p.rapidapi.com'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`API responded with status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        return result.bestmove || null;
+    } catch (err) {
+        console.error('Error fetching best move for game analysis:', err);
+        return null;
+    }
+}
+
+// Review game moves compared to best moves.
+//
+// Design: for each human (white) move, we need Stockfish's best move FOR THE
+// HUMAN in the position *before* that move was made. onDrop() records that
+// pre-move FEN into preMoveFensWhite right before applying the human's move
+// (only while in Grandmaster mode, non-two-player). Here — lazily, only if
+// the game actually reaches gameReview() — we query the API once per
+// recorded pre-move position. This is the fewest-API-calls-that-is-correct
+// approach: no extra calls happen during play (the AI's own per-turn
+// getBestMove() call is unaffected and unchanged), and if a Grandmaster game
+// is abandoned before ending, no analysis calls are made at all.
+async function gameReview() {
+    // History alternates colors (w, b, w, b, ...); the human is always white
+    // in this app, so filter rather than assuming whiteMoves[i] === history[i].
+    whiteMoves = game.history({ verbose: true }).filter(m => m.color === 'w');
+
+    toggleLoading(true);
     let reviewContent = '<h4>Game Analysis</h4><ul class="list-group">';
 
-    for (let i = 0; i < bestMovesWhite.length && i < whiteMoves.length; i++) {
-        const playerMove = whiteMoves[i].from + whiteMoves[i].to;
-        const bestMove = bestMovesWhite[i];
+    try {
+        const moveCount = Math.min(preMoveFensWhite.length, whiteMoves.length);
+        bestMovesWhite = await Promise.all(
+            preMoveFensWhite.slice(0, moveCount).map(fen => fetchBestMoveForFen(fen))
+        );
 
-        if (bestMove === playerMove) {
-            reviewContent += `<li class="list-group-item list-group-item-success">Move ${i + 1}: You played the best move (${playerMove})</li>`;
-        } else {
-            reviewContent += `<li class="list-group-item list-group-item-warning">Move ${i + 1}: You played ${playerMove}, but the best move was ${bestMove}</li>`;
+        for (let i = 0; i < moveCount; i++) {
+            const playerMove = whiteMoves[i].from + whiteMoves[i].to;
+            const bestMove = bestMovesWhite[i];
+
+            if (!bestMove) {
+                reviewContent += `<li class="list-group-item">Move ${i + 1}: Could not analyze this position (API error)</li>`;
+            } else if (bestMove === playerMove) {
+                reviewContent += `<li class="list-group-item list-group-item-success">Move ${i + 1}: You played the best move (${playerMove})</li>`;
+            } else {
+                reviewContent += `<li class="list-group-item list-group-item-warning">Move ${i + 1}: You played ${playerMove}, but the best move was ${bestMove}</li>`;
+            }
         }
+    } catch (err) {
+        console.error('Error during game review:', err);
+        reviewContent += '<li class="list-group-item list-group-item-danger">Analysis unavailable due to an error.</li>';
+    } finally {
+        toggleLoading(false);
     }
 
     reviewContent += '</ul>';
@@ -1112,6 +1347,7 @@ function gameReview() {
 async function getPuzzles() {
     toggleLoading(true);
     resetAllDifficulties();
+    resetGrandmasterAnalysisTracking();
     playingPuzzle = true;
 
     // Predefined puzzles in case the API fails
@@ -1144,7 +1380,7 @@ async function getPuzzles() {
         const options = {
             method: 'GET',
             headers: {
-                'X-RapidAPI-Key': '966dbf9131msh22bbb6805a935f5p186cfajsn640f0aba3bc3',
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
                 'X-RapidAPI-Host': 'chess-puzzles.p.rapidapi.com'
             }
         };
