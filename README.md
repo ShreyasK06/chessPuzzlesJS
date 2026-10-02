@@ -46,6 +46,35 @@ Opening `index.html` directly from disk still works for everything except the Ha
 
 Daily Puzzle and Grandmaster use third-party APIs through RapidAPI. The app has built-in fallbacks for both, but to use the live APIs you need your own RapidAPI key. Because this is a static site, any key placed in client-side code is visible to visitors; use a key with a restricted quota, or put the calls behind a small proxy.
 
+## Tests and benchmarks
+
+Requires Node.js (no dependencies to install).
+
+```bash
+npm test                  # unit tests for ai.js (node --test)
+node bench/benchmark.js   # search cost with and without pruning -> bench/results.json
+node bench/match.js       # Hard vs Easy/Medium, 20 games each -> bench/match-results.json
+```
+
+**Pruning benchmark** (9 positions: 3 opening, 3 middlegame, 3 endgame; one search per position; Node 22, i5-1135G7). Depth N includes iterations 1 through N, because the search deepens iteratively.
+
+| Depth | Nodes, pruned | Nodes, unpruned | Nodes cut | Avg time/move, pruned | Avg time/move, unpruned | Speedup |
+|---|---|---|---|---|---|---|
+| 2 | 1,437 | 6,963 | 79% | 168 ms | 431 ms | 2.6× |
+| 3 | 15,337 | 258,817 | 94% | 1.33 s | 17.8 s | 13.3× |
+| 4 | 73,737 | (1 position only) | n/a | 9.6 s | 108 s (start position) | ~11× |
+
+At depth 4, the unpruned search ran on the starting position only, because the full 9-position run would have exceeded the time budget. Pruned and unpruned searches returned the same score in every position, which confirms pruning doesn't change the result.
+
+**Strength match** (Hard at depth 3 with no time limit, alternating colors, draw declared at 200 plies, seeded random opponents):
+
+| Opponent | W / D / L | Avg game length |
+|---|---|---|
+| Easy | 20 / 0 / 0 | 35.6 plies |
+| Medium | 20 / 0 / 0 | 35.5 plies |
+
+All 40 wins were by checkmate. In the browser, Hard also stops at a 1.5 s time limit, so on slower machines it may play at a shallower depth than in this match.
+
 ## Tech stack
 
 JavaScript (ES6), [chess.js](https://github.com/jhlywa/chess.js) for rules and move generation, [chessboard.js](https://chessboardjs.com/) for the board UI, jQuery, Bootstrap 5, Web Workers.
@@ -57,6 +86,8 @@ index.html       UI shell
 main.js          Game modes, controls, difficulty logic, puzzles, Chess960
 ai.js            Negamax / alpha-beta engine and evaluation
 ai-worker.js     Web Worker wrapper around ai.js
+tests/           Unit tests for ai.js
+bench/           Pruning benchmark, strength match, and their results
 chess.js         Third-party rules library (BSD license, Jeff Hlywa)
 main.css         Styles
 ```
