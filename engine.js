@@ -618,6 +618,41 @@
     this.hashHi = undo.hashHi;
   };
 
+  // -- null move -------------------------------------------------------------
+  // Used only by null-move pruning in search: flips the side to move and
+  // clears the en-passant square without moving a piece. Pushes/pops a
+  // hashStack entry in lock step with makeMove/unmakeMove so isRepetition
+  // stays correct if probed from inside a null-move subtree.
+
+  Board.prototype.makeNullMove = function () {
+    var lo = this.hashLo, hi = this.hashHi;
+    if (this.epSquare !== -1) {
+      var f = fileOf(this.epSquare);
+      lo ^= Z_EP_LO[f];
+      hi ^= Z_EP_HI[f];
+    }
+    lo ^= Z_SIDE_LO;
+    hi ^= Z_SIDE_HI;
+
+    this.nullUndoStack = this.nullUndoStack || [];
+    this.nullUndoStack.push({ epSquare: this.epSquare, hashLo: this.hashLo, hashHi: this.hashHi });
+
+    this.epSquare = -1;
+    this.side ^= 1;
+    this.hashLo = lo | 0;
+    this.hashHi = hi | 0;
+    this.hashStack.push([this.hashLo, this.hashHi]);
+  };
+
+  Board.prototype.unmakeNullMove = function () {
+    this.hashStack.pop();
+    var undo = this.nullUndoStack.pop();
+    this.side ^= 1;
+    this.epSquare = undo.epSquare;
+    this.hashLo = undo.hashLo;
+    this.hashHi = undo.hashHi;
+  };
+
   // -- repetition ----------------------------------------------------------
 
   Board.prototype.setHistory = function (fens) {
@@ -1111,6 +1146,524 @@
   }
 
   // ---------------------------------------------------------------------
+  // Search - negamax PVS with fail-soft alpha-beta, a transposition table,
+  // quiescence search, null-move pruning, late-move reductions, killer and
+  // history move ordering, iterative deepening with a wall-clock time
+  // budget, and a small opening book.
+  // ---------------------------------------------------------------------
+
+  var MATE_SCORE = 30000;
+  var SEARCH_INF = 32000;
+  var MAX_PLY = 256;
+  var MATE_THRESHOLD = MATE_SCORE - MAX_PLY;
+
+  // -- transposition table -------------------------------------------------
+  // 2^20 entries in parallel typed arrays (no per-entry objects). depth -1
+  // in ttDepthArr marks a slot as never-written.
+
+  var TT_SIZE = 1 << 20;
+  var TT_MASK = TT_SIZE - 1;
+  var ttKeyLo = new Int32Array(TT_SIZE);
+  var ttKeyHi = new Int32Array(TT_SIZE);
+  var ttMoveArr = new Int32Array(TT_SIZE);
+  var ttScoreArr = new Int32Array(TT_SIZE);
+  var ttDepthArr = new Int8Array(TT_SIZE);
+  ttDepthArr.fill(-1);
+  var ttFlagArr = new Int8Array(TT_SIZE);
+
+  var TT_EXACT = 0, TT_LOWER = 1, TT_UPPER = 2;
+
+  // Adjusts a mate score to/from a ply-independent form before storing in
+  // (or after reading from) the TT, since the same TT entry can be probed
+  // from different plies-from-root on different calls.
+  function scoreToTT(score, ply) {
+    if (score > MATE_THRESHOLD) return score + ply;
+    if (score < -MATE_THRESHOLD) return score - ply;
+    return score;
+  }
+  function scoreFromTT(score, ply) {
+    if (score > MATE_THRESHOLD) return score - ply;
+    if (score < -MATE_THRESHOLD) return score + ply;
+    return score;
+  }
+
+  function ttProbe(lo, hi) {
+    var idx = (lo >>> 0) & TT_MASK;
+    if (ttDepthArr[idx] !== -1 && ttKeyLo[idx] === lo && ttKeyHi[idx] === hi) return idx;
+    return -1;
+  }
+
+  function ttStore(lo, hi, depth, score, flag, move, ply) {
+    var idx = (lo >>> 0) & TT_MASK;
+    if (ttDepthArr[idx] === -1 ||
+      (ttKeyLo[idx] === lo && ttKeyHi[idx] === hi) ||
+      depth >= ttDepthArr[idx]) {
+      ttKeyLo[idx] = lo;
+      ttKeyHi[idx] = hi;
+      ttMoveArr[idx] = move;
+      ttScoreArr[idx] = scoreToTT(score, ply);
+      ttDepthArr[idx] = depth;
+      ttFlagArr[idx] = flag;
+    }
+  }
+
+  // -- move ordering state ---------------------------------------------------
+
+  var killer1 = new Int32Array(MAX_PLY);
+  var killer2 = new Int32Array(MAX_PLY);
+  var historyTable = new Int32Array(2 * 128 * 128);
+
+  var ORDER_SCORES = new Int32Array(256);
+  var QORDER_SCORES = new Int32Array(256);
+
+  function hasNonPawnMaterial(board, side) {
+    var squares = board.squares;
+    for (var s = 0; s < 128; s++) {
+      if (s & 0x88) continue;
+      var p = squares[s];
+      if (p === EMPTY) continue;
+      if ((p >> 3) === side) {
+        var t = p & 7;
+        if (t !== PAWN && t !== KING) return true;
+      }
+    }
+    return false;
+  }
+
+  // MVV-LVA style score for a capture or promotion: bigger victim / promoted
+  // piece first, smaller attacker as a tiebreak.
+  function captureOrderScore(board, m) {
+    var flags = moveFlagsOf(m);
+    var promo = movePromoType(m);
+    var to = moveToSq(m);
+    var capturedType = 0;
+    if (flags & FLAG_EP) capturedType = PAWN;
+    else if (flags & FLAG_CAPTURE) capturedType = board.squares[to] & 7;
+    var movingType = board.squares[moveFromSq(m)] & 7;
+    var victimValue = capturedType ? MAT_MG[capturedType] : 0;
+    var promoValue = promo ? MAT_MG[promo] : 0;
+    return victimValue * 16 + promoValue - movingType;
+  }
+
+  // Orders captures/promotions-only move lists (quiescence) by MVV-LVA,
+  // in place, using a preallocated scratch score array (no allocation).
+  function orderCaptures(board, moves) {
+    var n = moves.length, i, j;
+    for (i = 0; i < n; i++) QORDER_SCORES[i] = captureOrderScore(board, moves[i]);
+    for (i = 1; i < n; i++) {
+      var ks = QORDER_SCORES[i], km = moves[i];
+      j = i - 1;
+      while (j >= 0 && QORDER_SCORES[j] < ks) {
+        QORDER_SCORES[j + 1] = QORDER_SCORES[j];
+        moves[j + 1] = moves[j];
+        j--;
+      }
+      QORDER_SCORES[j + 1] = ks;
+      moves[j + 1] = km;
+    }
+  }
+
+  // Orders a full legal move list for the main search: TT move, then
+  // captures/promotions by MVV-LVA, then the two killer moves for this ply,
+  // then quiets by history score. In place, no allocation.
+  function orderMoves(board, moves, ttHint, ply) {
+    var n = moves.length, i, j;
+    for (i = 0; i < n; i++) {
+      var m = moves[i], s;
+      if (m === ttHint) {
+        s = 2000000000;
+      } else {
+        var flags = moveFlagsOf(m);
+        var promo = movePromoType(m);
+        if ((flags & FLAG_CAPTURE) || promo) {
+          s = 1000000 + captureOrderScore(board, m);
+        } else if (m === killer1[ply]) {
+          s = 500001;
+        } else if (m === killer2[ply]) {
+          s = 500000;
+        } else {
+          s = historyTable[board.side * 16384 + moveFromSq(m) * 128 + moveToSq(m)];
+        }
+      }
+      ORDER_SCORES[i] = s;
+    }
+    for (i = 1; i < n; i++) {
+      var keyScore = ORDER_SCORES[i], keyMove = moves[i];
+      j = i - 1;
+      while (j >= 0 && ORDER_SCORES[j] < keyScore) {
+        ORDER_SCORES[j + 1] = ORDER_SCORES[j];
+        moves[j + 1] = moves[j];
+        j--;
+      }
+      ORDER_SCORES[j + 1] = keyScore;
+      moves[j + 1] = keyMove;
+    }
+  }
+
+  // -- quiescence ------------------------------------------------------------
+
+  function quiescence(board, alpha, beta, ply, ctx) {
+    ctx.nodes++;
+    if (ctx.allowStop && (ctx.nodes & 2047) === 0 && Date.now() >= ctx.deadline) {
+      ctx.stopped = true;
+    }
+    if (ctx.stopped) return 0;
+
+    var inCheck = board.inCheck();
+    var standPat = 0;
+    if (!inCheck) {
+      standPat = evaluateBoard(board);
+      if (standPat >= beta) return standPat;
+      if (standPat > alpha) alpha = standPat;
+    }
+
+    var moves = inCheck ? board.generateMoves() : board.generateCaptures();
+
+    if (inCheck && moves.length === 0) {
+      return -(MATE_SCORE - ply);
+    }
+
+    orderCaptures(board, moves);
+
+    var bestScore = inCheck ? -SEARCH_INF : standPat;
+
+    for (var i = 0; i < moves.length; i++) {
+      var m = moves[i];
+      var flags = moveFlagsOf(m);
+      var isCapture = (flags & FLAG_CAPTURE) !== 0;
+
+      if (!inCheck && isCapture) {
+        var to = moveToSq(m);
+        var capturedType = (flags & FLAG_EP) ? PAWN : (board.squares[to] & 7);
+        var victimValue = MAT_MG[capturedType];
+        if (standPat + victimValue + 200 < alpha) continue;
+      }
+
+      board.makeMove(m);
+      var score = -quiescence(board, -beta, -alpha, ply + 1, ctx);
+      board.unmakeMove();
+
+      if (ctx.stopped) return 0;
+
+      if (score > bestScore) bestScore = score;
+      if (score > alpha) alpha = score;
+      if (alpha >= beta) break;
+    }
+
+    return bestScore;
+  }
+
+  // -- negamax PVS -------------------------------------------------------
+
+  function negamax(board, depth, alpha, beta, ply, ctx, canNull) {
+    ctx.nodes++;
+    if (ctx.allowStop && (ctx.nodes & 2047) === 0 && Date.now() >= ctx.deadline) {
+      ctx.stopped = true;
+    }
+    if (ctx.stopped) return 0;
+
+    if (ply > 0 && (board.isRepetition() || board.halfmove >= 100)) return 0;
+
+    if (depth <= 0) {
+      return quiescence(board, alpha, beta, ply, ctx);
+    }
+
+    var lo = board.hashLo, hi = board.hashHi;
+    var ttIdx = ttProbe(lo, hi);
+    var ttHint = 0;
+    if (ttIdx !== -1) {
+      ttHint = ttMoveArr[ttIdx];
+      // The root (ply 0) always runs its full move loop so the iterative
+      // deepening driver gets a concrete root move/score every iteration;
+      // a stale/strong TT bound must not short-circuit it.
+      if (ply > 0 && ttDepthArr[ttIdx] >= depth) {
+        var ttSc = scoreFromTT(ttScoreArr[ttIdx], ply);
+        var flag = ttFlagArr[ttIdx];
+        if (flag === TT_EXACT) return ttSc;
+        if (flag === TT_LOWER && ttSc >= beta) return ttSc;
+        if (flag === TT_UPPER && ttSc <= alpha) return ttSc;
+      }
+    }
+
+    var inCheck = board.inCheck();
+    if (inCheck) depth++;
+
+    if (!inCheck && canNull && depth >= 3 && hasNonPawnMaterial(board, board.side)) {
+      var R = 2 + (depth > 6 ? 1 : 0);
+      board.makeNullMove();
+      var nullScore = -negamax(board, depth - 1 - R, -beta, -beta + 1, ply + 1, ctx, false);
+      board.unmakeNullMove();
+      if (ctx.stopped) return 0;
+      if (nullScore >= beta) return nullScore;
+    }
+
+    var moves = board.generateMoves();
+    if (moves.length === 0) {
+      return inCheck ? -(MATE_SCORE - ply) : 0;
+    }
+
+    orderMoves(board, moves, ttHint, ply);
+
+    var bestScore = -SEARCH_INF;
+    var bestMove = moves[0];
+    var ttFlagOut = TT_UPPER;
+
+    for (var i = 0; i < moves.length; i++) {
+      var m = moves[i];
+      var mFlags = moveFlagsOf(m);
+      var isCapture = (mFlags & FLAG_CAPTURE) !== 0;
+      var isPromo = movePromoType(m) !== 0;
+      var isQuiet = !isCapture && !isPromo;
+
+      board.makeMove(m);
+      var givesCheck = board.inCheck();
+      var newDepth = depth - 1;
+      var score;
+
+      if (i === 0) {
+        score = -negamax(board, newDepth, -beta, -alpha, ply + 1, ctx, true);
+      } else {
+        var reduction = 0;
+        if (isQuiet && !inCheck && !givesCheck && i >= 3 && depth >= 3) {
+          reduction = (i >= 8) ? 2 : 1;
+          if (newDepth - reduction < 0) reduction = newDepth;
+        }
+        score = -negamax(board, newDepth - reduction, -alpha - 1, -alpha, ply + 1, ctx, true);
+        if (!ctx.stopped && score > alpha && reduction > 0) {
+          score = -negamax(board, newDepth, -alpha - 1, -alpha, ply + 1, ctx, true);
+        }
+        if (!ctx.stopped && score > alpha && score < beta) {
+          score = -negamax(board, newDepth, -beta, -alpha, ply + 1, ctx, true);
+        }
+      }
+
+      board.unmakeMove();
+
+      if (ctx.stopped) return 0;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = m;
+        if (ply === 0) { ctx.rootMove = m; ctx.rootScore = score; }
+      }
+      if (score > alpha) {
+        alpha = score;
+        ttFlagOut = TT_EXACT;
+      }
+      if (alpha >= beta) {
+        ttFlagOut = TT_LOWER;
+        if (isQuiet) {
+          if (killer1[ply] !== m) { killer2[ply] = killer1[ply]; killer1[ply] = m; }
+          historyTable[board.side * 16384 + moveFromSq(m) * 128 + moveToSq(m)] += depth * depth;
+        }
+        break;
+      }
+    }
+
+    ttStore(lo, hi, depth, bestScore, ttFlagOut, bestMove, ply);
+
+    return bestScore;
+  }
+
+  // -- opening book ----------------------------------------------------------
+  // Keys are the FEN's first four fields (placement, side, castling, ep).
+  // Built at module load by replaying UCI move sequences for mainstream
+  // openings on a scratch Board; every move is validated legal against the
+  // position it's played in (an illegal entry throws at require() time).
+
+  function fenKey(fen) {
+    var parts = fen.trim().split(/\s+/);
+    return parts[0] + ' ' + parts[1] + ' ' + parts[2] + ' ' + parts[3];
+  }
+
+  var OPENING_LINES = [
+    // 1.e4 e5 - Ruy Lopez, Italian, Petrov, Scotch, King's Gambit, Vienna
+    ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5', 'a7a6'],
+    ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1b5', 'g8f6'],
+    ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'f8c5'],
+    ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'f1c4', 'g8f6'],
+    ['e2e4', 'e7e5', 'g1f3', 'g8f6'],
+    ['e2e4', 'e7e5', 'g1f3', 'b8c6', 'd2d4', 'e5d4'],
+    ['e2e4', 'e7e5', 'f2f4', 'e5f4'],
+    ['e2e4', 'e7e5', 'b1c3', 'g8f6'],
+    ['e2e4', 'e7e5', 'b1c3', 'b8c6'],
+    // 1.e4 c5 - Sicilian
+    ['e2e4', 'c7c5', 'g1f3', 'd7d6', 'd2d4', 'c5d4'],
+    ['e2e4', 'c7c5', 'g1f3', 'b8c6', 'd2d4', 'c5d4'],
+    ['e2e4', 'c7c5', 'g1f3', 'e7e6'],
+    ['e2e4', 'c7c5', 'b1c3', 'b8c6'],
+    ['e2e4', 'c7c5', 'c2c3', 'd7d5'],
+    // 1.e4 e6 - French
+    ['e2e4', 'e7e6', 'd2d4', 'd7d5'],
+    ['e2e4', 'e7e6', 'd2d4', 'd7d5', 'b1c3', 'g8f6'],
+    ['e2e4', 'e7e6', 'd2d4', 'd7d5', 'b1d2', 'g8f6'],
+    // 1.e4 c6 - Caro-Kann
+    ['e2e4', 'c7c6', 'd2d4', 'd7d5'],
+    ['e2e4', 'c7c6', 'd2d4', 'd7d5', 'b1c3', 'g8f6'],
+    ['e2e4', 'c7c6', 'd2d4', 'd7d5', 'e4e5', 'c8f5'],
+    // other 1.e4 replies
+    ['e2e4', 'd7d6', 'd2d4', 'g8f6'],
+    ['e2e4', 'g8f6', 'e4e5', 'f6d5'],
+    ['e2e4', 'd7d5', 'e4d5', 'd8d5'],
+    // 1.d4 d5 - QGD, Slav, QGA
+    ['d2d4', 'd7d5', 'c2c4', 'e7e6'],
+    ['d2d4', 'd7d5', 'c2c4', 'c7c6'],
+    ['d2d4', 'd7d5', 'c2c4', 'd5c4'],
+    ['d2d4', 'd7d5', 'g1f3', 'g8f6'],
+    ['d2d4', 'd7d5', 'b1c3', 'g8f6'],
+    // 1.d4 Nf6 - KID, Nimzo, Queen's Indian, Grunfeld
+    ['d2d4', 'g8f6', 'c2c4', 'g7g6'],
+    ['d2d4', 'g8f6', 'c2c4', 'e7e6', 'b1c3', 'f8b4'],
+    ['d2d4', 'g8f6', 'c2c4', 'e7e6', 'g1f3', 'b7b6'],
+    ['d2d4', 'g8f6', 'c2c4', 'g7g6', 'b1c3', 'd7d5'],
+    ['d2d4', 'g8f6', 'g1f3', 'd7d5'],
+    ['d2d4', 'g8f6', 'g1f3', 'e7e6'],
+    // 1.c4 - English
+    ['c2c4', 'e7e5', 'g1f3', 'g8f6'],
+    ['c2c4', 'c7c5', 'g1f3', 'g8f6'],
+    ['c2c4', 'g8f6', 'b1c3', 'e7e5'],
+    ['c2c4', 'e7e6', 'g1f3', 'g8f6'],
+    // 1.Nf3 - Reti
+    ['g1f3', 'd7d5', 'c2c4', 'c7c6'],
+    ['g1f3', 'g8f6', 'c2c4', 'g7g6'],
+    ['g1f3', 'g8f6', 'd2d4', 'e7e6']
+  ];
+
+  function buildBook() {
+    var book = Object.create(null);
+    for (var li = 0; li < OPENING_LINES.length; li++) {
+      var line = OPENING_LINES[li];
+      var b = new Board();
+      for (var ply = 0; ply < line.length; ply++) {
+        var key = fenKey(b.toFen());
+        var uci = line[ply];
+        var legal = b.generateMoves();
+        var mv = -1;
+        for (var k = 0; k < legal.length; k++) {
+          if (moveToUci(legal[k]) === uci) { mv = legal[k]; break; }
+        }
+        if (mv === -1) {
+          throw new Error('opening book: illegal move ' + uci + ' in line ' + line.join(' ') + ' at ply ' + ply);
+        }
+        if (!book[key]) book[key] = [];
+        if (book[key].indexOf(uci) === -1) book[key].push(uci);
+        b.makeMove(mv);
+      }
+    }
+    return book;
+  }
+
+  var BOOK = buildBook();
+
+  function pickBookMove(board, fen) {
+    var key = fenKey(fen);
+    var entries = BOOK[key];
+    if (!entries || entries.length === 0) return null;
+    var legal = board.generateMoves();
+    var candidates = [];
+    for (var i = 0; i < entries.length; i++) {
+      for (var j = 0; j < legal.length; j++) {
+        if (moveToUci(legal[j]) === entries[i]) { candidates.push(legal[j]); break; }
+      }
+    }
+    if (candidates.length === 0) return null;
+    return candidates[(Math.random() * candidates.length) | 0];
+  }
+
+  // -- top-level search --------------------------------------------------
+
+  function search(fen, opts) {
+    opts = opts || {};
+    var timeLimitMs = opts.timeLimitMs !== undefined ? opts.timeLimitMs : 2000;
+    var maxDepth = opts.maxDepth !== undefined ? opts.maxDepth : 64;
+    var history = opts.history || [];
+    var useBook = opts.useBook !== undefined ? opts.useBook : true;
+
+    var startTime = Date.now();
+
+    if (useBook) {
+      var bookBoard = new Board(fen);
+      var bookMv = pickBookMove(bookBoard, fen);
+      if (bookMv !== null) {
+        return {
+          move: { from: moveFrom(bookMv), to: moveTo(bookMv), promotion: movePromo(bookMv) },
+          uci: moveToUci(bookMv),
+          score: 0,
+          depth: 0,
+          nodes: 0,
+          timeMs: Date.now() - startTime,
+          book: true
+        };
+      }
+    }
+
+    var board = new Board(fen);
+    board.setHistory(history);
+
+    var rootInCheck = board.inCheck();
+    var rootMoves = board.generateMoves();
+    if (rootMoves.length === 0) {
+      return {
+        move: null,
+        uci: null,
+        score: rootInCheck ? -MATE_SCORE : 0,
+        depth: 0,
+        nodes: 0,
+        timeMs: Date.now() - startTime,
+        book: false
+      };
+    }
+
+    killer1.fill(0);
+    killer2.fill(0);
+    historyTable.fill(0);
+
+    var ctx = {
+      nodes: 0,
+      deadline: startTime + timeLimitMs,
+      stopped: false,
+      allowStop: false,
+      rootMove: 0,
+      rootScore: 0
+    };
+
+    var overallBestMove = rootMoves[0];
+    var overallBestScore = 0;
+    var completedDepth = 0;
+
+    for (var depth = 1; depth <= maxDepth; depth++) {
+      ctx.allowStop = depth > 1; // depth 1 always completes
+      ctx.rootMove = 0;
+      ctx.rootScore = 0;
+
+      negamax(board, depth, -SEARCH_INF, SEARCH_INF, 0, ctx, true);
+
+      if (ctx.rootMove !== 0) {
+        overallBestMove = ctx.rootMove;
+        overallBestScore = ctx.rootScore;
+        completedDepth = depth;
+      }
+
+      if (ctx.stopped) break;
+
+      if (Math.abs(overallBestScore) >= MATE_THRESHOLD) break; // proven mate
+
+      var elapsed = Date.now() - startTime;
+      if (elapsed > timeLimitMs * 0.5) break; // don't start a new iteration past 50% of budget
+    }
+
+    return {
+      move: { from: moveFrom(overallBestMove), to: moveTo(overallBestMove), promotion: movePromo(overallBestMove) },
+      uci: moveToUci(overallBestMove),
+      score: overallBestScore,
+      depth: completedDepth,
+      nodes: ctx.nodes,
+      timeMs: Date.now() - startTime,
+      book: false
+    };
+  }
+
+  // ---------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------
 
@@ -1122,7 +1675,10 @@
     moveTo: moveTo,
     movePromo: movePromo,
     evaluateBoard: evaluateBoard,
-    evaluate: evaluate
+    evaluate: evaluate,
+    search: search,
+    MATE_SCORE: MATE_SCORE,
+    BOOK: BOOK
   };
 
   if (typeof self !== 'undefined') {
