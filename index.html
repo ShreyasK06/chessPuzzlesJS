@@ -33,7 +33,9 @@
     <!-- Chess JS (slightly modified) -->
     <script defer src="./chess.js"></script>
 
-    <!-- Chess AI engine (negamax/alpha-beta search used by Hard difficulty) -->
+    <!-- Chess AI engine (negamax/alpha-beta search used by Easy/Medium difficulty,
+         via ai-worker.js; the strong engine used by Hard runs in engine-worker.js
+         and is not loaded on the page) -->
     <script defer src="./ai.js"></script>
 
     <!-- Bootstrap JS (Updated to v5) -->
@@ -82,6 +84,7 @@
                         <i class="fas fa-robot me-2"></i>Difficulty
                     </button>
                     <ul class="dropdown-menu" aria-labelledby="difficultyDropdown">
+                        <li><button id="beginner" class="dropdown-item">Beginner Level</button></li>
                         <li><button id="easy" class="dropdown-item">Easy Level</button></li>
                         <li><button id="medium" class="dropdown-item">Medium Level</button></li>
                         <li><button id="hard" class="dropdown-item">Hard Level</button></li>
@@ -215,9 +218,10 @@
 
                             <h6><i class="fas fa-cog me-2"></i>Difficulty Levels (AI Mode)</h6>
                             <ul class="list-group mb-4">
-                                <li class="list-group-item"><strong>Easy:</strong> For beginners, makes random moves</li>
-                                <li class="list-group-item"><strong>Medium:</strong> Intermediate level, prioritizes captures and checks</li>
-                                <li class="list-group-item"><strong>Hard:</strong> Advanced level, uses strategic thinking</li>
+                                <li class="list-group-item"><strong>Beginner:</strong> Prefers checks and captures, otherwise random</li>
+                                <li class="list-group-item"><strong>Easy:</strong> Plays sensible moves but blunders often</li>
+                                <li class="list-group-item"><strong>Medium:</strong> Looks 3 moves ahead</li>
+                                <li class="list-group-item"><strong>Hard:</strong> Strong engine: deep search, opening book</li>
                                 <li class="list-group-item"><strong>Grandmaster:</strong> Expert level, uses Stockfish engine</li>
                             </ul>
                         </div>
