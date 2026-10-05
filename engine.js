@@ -686,6 +686,431 @@
   }
 
   // ---------------------------------------------------------------------
+  // Evaluation - tapered PeSTO (Rofchade) piece-square tables plus pawn
+  // structure, bishop pair, rook file, mobility and king-safety terms.
+  //
+  // evaluateBoard() is called at every quiescence node by the search, so it
+  // must not allocate: every scratch array it touches (pawn-file bitmasks)
+  // is preallocated at module scope and merely cleared/reused each call.
+  // Mobility is counted by scanning rays/offsets directly on board.squares
+  // rather than via generateMoves(), to skip the pseudo-legal move array
+  // allocation and the make/unmake-based legality filter.
+  // ---------------------------------------------------------------------
+
+  // -- material (centipawns) ----------------------------------------------
+
+  var MAT_MG = [0, 82, 337, 365, 477, 1025, 0];
+  var MAT_EG = [0, 94, 281, 297, 512, 936, 0];
+
+  // Phase weight per piece type: N/B = 1, R = 2, Q = 4; summed over both
+  // sides and capped at 24 (the starting-position total).
+  var PHASE_WEIGHT = [0, 0, 1, 1, 2, 4, 0];
+
+  // -- PeSTO/Rofchade piece-square tables ----------------------------------
+  // Each table is written a8..h8 first (index 0 = a8), from white's point
+  // of view, exactly as published on chessprogramming.org under "PeSTO's
+  // Evaluation Function". For a white piece on 0x88 square sq (rank r =
+  // sq>>4, file f = sq&7) the table index is (7-r)*8+f; for a black piece
+  // it is the vertically mirrored r*8+f (same table, no separate black
+  // table - see the index computation in evaluateBoard).
+
+  var PAWN_MG_TABLE = [
+    0, 0, 0, 0, 0, 0, 0, 0,
+    98, 134, 61, 95, 68, 126, 34, -11,
+    -6, 7, 26, 31, 65, 56, 25, -20,
+    -14, 13, 6, 21, 23, 12, 17, -23,
+    -27, -2, -5, 12, 17, 6, 10, -25,
+    -26, -4, -4, -10, 3, 3, 33, -12,
+    -35, -1, -20, -23, -15, 24, 38, -22,
+    0, 0, 0, 0, 0, 0, 0, 0
+  ];
+  var PAWN_EG_TABLE = [
+    0, 0, 0, 0, 0, 0, 0, 0,
+    178, 173, 158, 134, 147, 132, 165, 187,
+    94, 100, 85, 67, 56, 53, 82, 84,
+    32, 24, 13, 5, -2, 4, 17, 17,
+    13, 9, -3, -7, -7, -8, 3, -1,
+    4, 7, -6, 1, 0, -5, -1, -8,
+    13, 8, 8, 10, 13, 0, 2, -7,
+    0, 0, 0, 0, 0, 0, 0, 0
+  ];
+
+  var KNIGHT_MG_TABLE = [
+    -167, -89, -34, -49, 61, -97, -15, -107,
+    -73, -41, 72, 36, 23, 62, 7, -17,
+    -47, 60, 37, 65, 84, 129, 73, 44,
+    -9, 17, 19, 53, 37, 69, 18, 22,
+    -13, 4, 16, 13, 28, 19, 21, -8,
+    -23, -9, 12, 10, 19, 17, 25, -16,
+    -29, -53, -12, -3, -1, 18, -14, -19,
+    -105, -21, -58, -33, -17, -28, -19, -23
+  ];
+  var KNIGHT_EG_TABLE = [
+    -58, -38, -13, -28, -31, -27, -63, -99,
+    -25, -8, -25, -2, -9, -25, -24, -52,
+    -24, -20, 10, 9, -1, -9, -19, -41,
+    -17, 3, 22, 22, 22, 11, 8, -18,
+    -18, -6, 16, 25, 16, 17, 4, -18,
+    -23, -3, -1, 15, 10, -3, -20, -22,
+    -42, -20, -10, -5, -2, -20, -23, -44,
+    -29, -51, -23, -15, -22, -18, -50, -64
+  ];
+
+  var BISHOP_MG_TABLE = [
+    -29, 4, -82, -37, -25, -42, 7, -8,
+    -26, 16, -18, -13, 30, 59, 18, -47,
+    -16, 37, 43, 40, 35, 50, 37, -2,
+    -4, 5, 19, 50, 37, 37, 7, -2,
+    -6, 13, 13, 26, 34, 12, 10, 4,
+    0, 15, 15, 15, 14, 27, 18, 10,
+    4, 15, 16, 0, 7, 21, 33, 1,
+    -33, -3, -14, -21, -13, -12, -39, -21
+  ];
+  var BISHOP_EG_TABLE = [
+    -14, -21, -11, -8, -7, -9, -17, -24,
+    -8, -4, 7, -12, -3, -13, -4, -14,
+    2, -8, 0, -1, -2, 6, 0, 4,
+    -3, 9, 12, 9, 14, 10, 3, 2,
+    -6, 3, 13, 19, 7, 10, -3, -9,
+    -12, -3, 8, 10, 13, 3, -7, -15,
+    -14, -18, -7, -1, 4, -9, -15, -27,
+    -23, -9, -23, -5, -9, -16, -5, -17
+  ];
+
+  var ROOK_MG_TABLE = [
+    32, 42, 32, 51, 63, 9, 31, 43,
+    27, 32, 58, 62, 80, 67, 26, 44,
+    -5, 19, 26, 36, 17, 45, 61, 16,
+    -24, -11, 7, 26, 24, 35, -8, -20,
+    -36, -26, -12, -1, 9, -7, 6, -23,
+    -45, -25, -16, -17, 3, 0, -5, -33,
+    -44, -16, -20, -9, -1, 11, -6, -71,
+    -19, -13, 1, 17, 16, 7, -37, -26
+  ];
+  var ROOK_EG_TABLE = [
+    13, 10, 18, 15, 12, 12, 8, 5,
+    11, 13, 13, 11, -3, 3, 8, 3,
+    7, 7, 7, 5, 4, -3, -5, -3,
+    4, 3, 13, 1, 2, 1, -1, 2,
+    3, 5, 8, 4, -5, -6, -8, -11,
+    -4, 0, -5, -1, -7, -12, -8, -16,
+    -6, -6, 0, 2, -9, -9, -11, -3,
+    -9, 2, 3, -1, -5, -13, 4, -20
+  ];
+
+  var QUEEN_MG_TABLE = [
+    -28, 0, 29, 12, 59, 44, 43, 45,
+    -24, -39, -5, 1, -16, 57, 28, 54,
+    -13, -17, 7, 8, 29, 56, 47, 57,
+    -27, -27, -16, -16, -1, 17, -2, 1,
+    -9, -26, -9, -10, -2, -4, 3, -3,
+    -14, 2, -11, -2, -5, 2, 14, 5,
+    -35, -8, 11, 2, 8, 15, -3, 1,
+    -1, -18, -9, 10, -15, -25, -31, -50
+  ];
+  var QUEEN_EG_TABLE = [
+    -9, 22, 22, 27, 27, 19, 10, 20,
+    -17, 20, 32, 41, 58, 25, 30, 0,
+    -20, 6, 9, 49, 47, 35, 19, 9,
+    3, 22, 24, 45, 57, 40, 57, 36,
+    -18, 28, 19, 47, 31, 34, 39, 23,
+    -16, -27, 15, 6, 9, 17, 10, 5,
+    -22, -23, -30, -16, -16, -23, -36, -32,
+    -33, -28, -22, -43, -5, -32, -20, -41
+  ];
+
+  var KING_MG_TABLE = [
+    -65, 23, 16, -15, -56, -34, 2, 13,
+    29, -1, -20, -7, -8, -4, -38, -29,
+    -9, 24, 2, -16, -20, 6, 22, -22,
+    -17, -20, -12, -27, -30, -25, -14, -36,
+    -49, -1, -27, -39, -46, -44, -33, -51,
+    -14, -14, -22, -46, -44, -30, -15, -27,
+    1, 7, -8, -64, -43, -16, 9, 8,
+    -15, 36, 12, -54, 8, -28, 24, 14
+  ];
+  var KING_EG_TABLE = [
+    -74, -35, -18, -18, -11, 15, 4, -17,
+    -12, 17, 14, 17, 17, 38, 23, 11,
+    10, 17, 23, 15, 20, 45, 44, 13,
+    -8, 22, 24, 27, 26, 33, 26, 3,
+    -18, -4, 21, 24, 27, 23, 9, -11,
+    -19, -3, 11, 21, 23, 16, 7, -9,
+    -27, -11, 4, 13, 14, 4, -5, -17,
+    -53, -34, -21, -11, -28, -14, -24, -43
+  ];
+
+  var PST_MG = [null, PAWN_MG_TABLE, KNIGHT_MG_TABLE, BISHOP_MG_TABLE, ROOK_MG_TABLE, QUEEN_MG_TABLE, KING_MG_TABLE];
+  var PST_EG = [null, PAWN_EG_TABLE, KNIGHT_EG_TABLE, BISHOP_EG_TABLE, ROOK_EG_TABLE, QUEEN_EG_TABLE, KING_EG_TABLE];
+
+  // -- pawn structure -------------------------------------------------------
+
+  var PASSED_MG = [0, 5, 10, 20, 35, 60, 100, 0];
+  var PASSED_EG = [0, 10, 20, 40, 70, 120, 200, 0];
+  var DOUBLED_MG = -10, DOUBLED_EG = -20;
+  var ISOLATED_MG = -10, ISOLATED_EG = -15;
+
+  var BISHOP_PAIR_MG = 30, BISHOP_PAIR_EG = 50;
+  var ROOK_OPEN_FILE = 25, ROOK_SEMI_OPEN_FILE = 10;
+
+  // Mobility weights/baselines, indexed by piece type (N/B/R/Q only).
+  var MOB_MG = [0, 0, 4, 5, 2, 1, 0];
+  var MOB_EG = [0, 0, 4, 5, 4, 2, 0];
+  var MOB_BASE = [0, 0, 4, 6, 7, 13, 0];
+
+  var KING_SHIELD_PENALTY = -15;
+  var KING_ATTACK_PENALTY = -8;
+
+  // Popcount of an 8-bit mask, precomputed once.
+  var POPCOUNT8 = new Uint8Array(256);
+  for (var pc = 0; pc < 256; pc++) {
+    var bits = pc, cnt = 0;
+    while (bits) { cnt += bits & 1; bits >>= 1; }
+    POPCOUNT8[pc] = cnt;
+  }
+
+  // Preallocated scratch: per-file bitmask (bit r set => pawn of that color
+  // on rank r) for each color. Cleared and reused on every evaluateBoard()
+  // call - never reallocated, so the hot (quiescence) path makes no
+  // allocations.
+  var PAWN_FILE_W = new Int32Array(8);
+  var PAWN_FILE_B = new Int32Array(8);
+
+  function countKnightMobility(squares, s, us) {
+    var cnt = 0;
+    for (var i = 0; i < KNIGHT_OFFSETS.length; i++) {
+      var t = s + KNIGHT_OFFSETS[i];
+      if (offboard(t)) continue;
+      var p = squares[t];
+      if (p === EMPTY || (p >> 3) !== us) cnt++;
+    }
+    return cnt;
+  }
+
+  function countSlidingMobility(squares, s, offsets, us) {
+    var cnt = 0;
+    for (var i = 0; i < offsets.length; i++) {
+      var d = offsets[i];
+      var t = s + d;
+      while (!offboard(t)) {
+        var p = squares[t];
+        if (p === EMPTY) { cnt++; t += d; continue; }
+        if ((p >> 3) !== us) cnt++;
+        break;
+      }
+    }
+    return cnt;
+  }
+
+  // Counts N/B/R/Q attackers of color byColor landing on square s. Used
+  // only for the 8 squares around a king, so the ray scans stay cheap.
+  function countAttackersOnSquare(squares, s, byColor) {
+    var cnt = 0, i, t, d, p;
+
+    var knightCode = KNIGHT | (byColor << 3);
+    for (i = 0; i < KNIGHT_OFFSETS.length; i++) {
+      t = s + KNIGHT_OFFSETS[i];
+      if (!offboard(t) && squares[t] === knightCode) cnt++;
+    }
+
+    for (i = 0; i < BISHOP_OFFSETS.length; i++) {
+      d = BISHOP_OFFSETS[i];
+      t = s + d;
+      while (!offboard(t)) {
+        p = squares[t];
+        if (p !== EMPTY) {
+          if ((p >> 3) === byColor && ((p & 7) === BISHOP || (p & 7) === QUEEN)) cnt++;
+          break;
+        }
+        t += d;
+      }
+    }
+
+    for (i = 0; i < ROOK_OFFSETS.length; i++) {
+      d = ROOK_OFFSETS[i];
+      t = s + d;
+      while (!offboard(t)) {
+        p = squares[t];
+        if (p !== EMPTY) {
+          if ((p >> 3) === byColor && ((p & 7) === ROOK || (p & 7) === QUEEN)) cnt++;
+          break;
+        }
+        t += d;
+      }
+    }
+
+    return cnt;
+  }
+
+  function countMinorMajorAttacks(squares, kingSq, byColor) {
+    var cnt = 0;
+    for (var i = 0; i < KING_OFFSETS.length; i++) {
+      var ring = kingSq + KING_OFFSETS[i];
+      if (offboard(ring)) continue;
+      cnt += countAttackersOnSquare(squares, ring, byColor);
+    }
+    return cnt;
+  }
+
+  // -15 per missing pawn from the 3-square shield in front of a castled
+  // king (only applies when the king is on files a-c or f-h).
+  function kingShieldPenalty(squares, kingSq, color) {
+    var kr = kingSq >> 4, kf = kingSq & 7;
+    if (kf > 2 && kf < 5) return 0;
+    var shieldRank = color === WHITE ? kr + 1 : kr - 1;
+    if (shieldRank < 0 || shieldRank > 7) return 0;
+    var ownPawn = PAWN | (color << 3);
+    var penalty = 0;
+    for (var df = -1; df <= 1; df++) {
+      var ff = kf + df;
+      if (ff < 0 || ff > 7) continue;
+      if (squares[sq(shieldRank, ff)] !== ownPawn) penalty += KING_SHIELD_PENALTY;
+    }
+    return penalty;
+  }
+
+  // Evaluates the position from the side-to-move's perspective (integer
+  // centipawns; positive favors the side to move). No allocations: all
+  // scratch state is either a module-level typed array (cleared in place)
+  // or a local primitive.
+  function evaluateBoard(board) {
+    var squares = board.squares;
+    var mgWhite = 0, mgBlack = 0, egWhite = 0, egBlack = 0, phase = 0;
+    var bishopCountW = 0, bishopCountB = 0;
+    var s, piece, type, color, r, f, idx;
+
+    PAWN_FILE_W.fill(0);
+    PAWN_FILE_B.fill(0);
+
+    // Pass 1: material + PST + phase + pawn-file bitmasks + bishop counts.
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) continue;
+      piece = squares[s];
+      if (piece === EMPTY) continue;
+      type = piece & 7;
+      color = piece >> 3;
+      r = s >> 4; f = s & 7;
+      idx = color === WHITE ? (7 - r) * 8 + f : r * 8 + f;
+
+      if (color === WHITE) {
+        mgWhite += MAT_MG[type] + PST_MG[type][idx];
+        egWhite += MAT_EG[type] + PST_EG[type][idx];
+      } else {
+        mgBlack += MAT_MG[type] + PST_MG[type][idx];
+        egBlack += MAT_EG[type] + PST_EG[type][idx];
+      }
+      phase += PHASE_WEIGHT[type];
+
+      if (type === PAWN) {
+        if (color === WHITE) PAWN_FILE_W[f] |= (1 << r);
+        else PAWN_FILE_B[f] |= (1 << r);
+      } else if (type === BISHOP) {
+        if (color === WHITE) bishopCountW++; else bishopCountB++;
+      }
+    }
+
+    if (phase > 24) phase = 24;
+
+    if (bishopCountW >= 2) { mgWhite += BISHOP_PAIR_MG; egWhite += BISHOP_PAIR_EG; }
+    if (bishopCountB >= 2) { mgBlack += BISHOP_PAIR_MG; egBlack += BISHOP_PAIR_EG; }
+
+    // Doubled pawns: once per file, scaled by the count of extra pawns.
+    for (f = 0; f < 8; f++) {
+      var cw = POPCOUNT8[PAWN_FILE_W[f] & 0xff];
+      if (cw > 1) { mgWhite += DOUBLED_MG * (cw - 1); egWhite += DOUBLED_EG * (cw - 1); }
+      var cb = POPCOUNT8[PAWN_FILE_B[f] & 0xff];
+      if (cb > 1) { mgBlack += DOUBLED_MG * (cb - 1); egBlack += DOUBLED_EG * (cb - 1); }
+    }
+
+    // Pass 2: pawn isolated/passed bonuses, N/B/R/Q mobility + rook files,
+    // king safety. Requires the pawn-file bitmasks from pass 1.
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) continue;
+      piece = squares[s];
+      if (piece === EMPTY) continue;
+      type = piece & 7;
+      color = piece >> 3;
+      r = s >> 4; f = s & 7;
+
+      if (type === PAWN) {
+        var own = color === WHITE ? PAWN_FILE_W : PAWN_FILE_B;
+        var opp = color === WHITE ? PAWN_FILE_B : PAWN_FILE_W;
+        var leftMask = f > 0 ? own[f - 1] : 0;
+        var rightMask = f < 7 ? own[f + 1] : 0;
+        var isolated = (leftMask === 0 && rightMask === 0);
+
+        var blocked;
+        if (color === WHITE) {
+          var aheadMaskW = r < 7 ? (0xff << (r + 1)) & 0xff : 0;
+          blocked = (opp[f] & aheadMaskW) !== 0 ||
+            (f > 0 && (opp[f - 1] & aheadMaskW) !== 0) ||
+            (f < 7 && (opp[f + 1] & aheadMaskW) !== 0);
+        } else {
+          var aheadMaskB = r > 0 ? (1 << r) - 1 : 0;
+          blocked = (opp[f] & aheadMaskB) !== 0 ||
+            (f > 0 && (opp[f - 1] & aheadMaskB) !== 0) ||
+            (f < 7 && (opp[f + 1] & aheadMaskB) !== 0);
+        }
+        var passed = !blocked;
+        var relRank = color === WHITE ? r : 7 - r;
+
+        var mgAdd = 0, egAdd = 0;
+        if (isolated) { mgAdd += ISOLATED_MG; egAdd += ISOLATED_EG; }
+        if (passed) { mgAdd += PASSED_MG[relRank]; egAdd += PASSED_EG[relRank]; }
+        if (color === WHITE) { mgWhite += mgAdd; egWhite += egAdd; }
+        else { mgBlack += mgAdd; egBlack += egAdd; }
+
+      } else if (type === KNIGHT) {
+        var mobN = countKnightMobility(squares, s, color) - MOB_BASE[KNIGHT];
+        if (color === WHITE) { mgWhite += mobN * MOB_MG[KNIGHT]; egWhite += mobN * MOB_EG[KNIGHT]; }
+        else { mgBlack += mobN * MOB_MG[KNIGHT]; egBlack += mobN * MOB_EG[KNIGHT]; }
+
+      } else if (type === BISHOP) {
+        var mobB = countSlidingMobility(squares, s, BISHOP_OFFSETS, color) - MOB_BASE[BISHOP];
+        if (color === WHITE) { mgWhite += mobB * MOB_MG[BISHOP]; egWhite += mobB * MOB_EG[BISHOP]; }
+        else { mgBlack += mobB * MOB_MG[BISHOP]; egBlack += mobB * MOB_EG[BISHOP]; }
+
+      } else if (type === ROOK) {
+        var mobR = countSlidingMobility(squares, s, ROOK_OFFSETS, color) - MOB_BASE[ROOK];
+        var ownFile = color === WHITE ? PAWN_FILE_W[f] : PAWN_FILE_B[f];
+        var oppFile = color === WHITE ? PAWN_FILE_B[f] : PAWN_FILE_W[f];
+        var fileBonus = 0;
+        if (ownFile === 0) fileBonus = oppFile === 0 ? ROOK_OPEN_FILE : ROOK_SEMI_OPEN_FILE;
+        if (color === WHITE) {
+          mgWhite += mobR * MOB_MG[ROOK] + fileBonus;
+          egWhite += mobR * MOB_EG[ROOK] + fileBonus;
+        } else {
+          mgBlack += mobR * MOB_MG[ROOK] + fileBonus;
+          egBlack += mobR * MOB_EG[ROOK] + fileBonus;
+        }
+
+      } else if (type === QUEEN) {
+        var mobQ = countSlidingMobility(squares, s, KING_OFFSETS, color) - MOB_BASE[QUEEN];
+        if (color === WHITE) { mgWhite += mobQ * MOB_MG[QUEEN]; egWhite += mobQ * MOB_EG[QUEEN]; }
+        else { mgBlack += mobQ * MOB_MG[QUEEN]; egBlack += mobQ * MOB_EG[QUEEN]; }
+
+      } else if (type === KING) {
+        var penalty = kingShieldPenalty(squares, s, color) +
+          KING_ATTACK_PENALTY * countMinorMajorAttacks(squares, s, color ^ 1);
+        if (color === WHITE) mgWhite += penalty;
+        else mgBlack += penalty;
+      }
+    }
+
+    var totalMg = mgWhite - mgBlack;
+    var totalEg = egWhite - egBlack;
+    var score = ((totalMg * phase + totalEg * (24 - phase)) / 24) | 0;
+    // Normalize -0 to 0 (score === 0 ? 0 : -score) so a drawn-material
+    // position evaluates identically for either side to move under
+    // assert.strict.equal's Object.is-based comparison (0 !== -0 there).
+    return board.side === WHITE ? score : (score === 0 ? 0 : -score);
+  }
+
+  function evaluate(fen) {
+    return evaluateBoard(new Board(fen));
+  }
+
+  // ---------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------
 
@@ -695,7 +1120,9 @@
     moveToUci: moveToUci,
     moveFrom: moveFrom,
     moveTo: moveTo,
-    movePromo: movePromo
+    movePromo: movePromo,
+    evaluateBoard: evaluateBoard,
+    evaluate: evaluate
   };
 
   if (typeof self !== 'undefined') {
