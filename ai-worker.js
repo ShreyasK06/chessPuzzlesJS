@@ -27,6 +27,28 @@ onmessage = function (e) {
 
     try {
         const game = new Chess(fen);
+
+        if (data.mode === 'easy') {
+            const startTime = Date.now();
+            AI.resetNodes();
+            const scored = AI.scoreRootMoves(game, AI.EASY_DEPTH);
+            const chosen = AI.pickEasyMove(scored, Math.random);
+            const chosenEntry = scored.find(function (entry) {
+                return entry.move === chosen;
+            });
+
+            postMessage({
+                id: id,
+                ok: true,
+                move: chosen,
+                score: chosenEntry ? chosenEntry.score : 0,
+                depth: AI.EASY_DEPTH,
+                nodes: AI.getNodes(),
+                timeMs: Date.now() - startTime
+            });
+            return;
+        }
+
         const result = AI.search(game, { depth: depth, timeLimitMs: timeLimitMs });
 
         postMessage({

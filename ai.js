@@ -399,6 +399,51 @@
   }
 
   // ---------------------------------------------------------------------
+  // Easy level: deliberate-blunder move picker
+  // ---------------------------------------------------------------------
+
+  var EASY_DEPTH = 2;
+
+  /**
+   * Score every legal root move from the side-to-move's perspective, using
+   * a full-window negamax search at `depth - 1` below each root move.
+   * Returns [{ move: {from,to,promotion,san}, score }], sorted descending
+   * by score. Leaves `game` unchanged (each move() is matched by undo()).
+   */
+  function scoreRootMoves(game, depth) {
+    var moves = orderMoves(game.moves({ verbose: true }));
+    var prevPruning = config.pruning;
+    config.pruning = true;
+    var out = [];
+    for (var i = 0; i < moves.length; i++) {
+      var m = moves[i];
+      game.move(m);
+      var score = -negamax(game, depth - 1, -Infinity, Infinity, 1);
+      game.undo();
+      out.push({ move: { from: m.from, to: m.to, promotion: m.promotion || null, san: m.san }, score: score });
+    }
+    config.pruning = prevPruning;
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out;
+  }
+
+  /**
+   * Pick one move from `scored` (as returned by scoreRootMoves) using the
+   * supplied `rng` (a Math.random-like 0-1 generator). With r = rng():
+   *   r < 0.65         -> the best-scored move
+   *   0.65 <= r < 0.90  -> uniform among the top min(4, n) moves
+   *   r >= 0.90         -> uniform among all moves
+   * Returns null if `scored` is empty.
+   */
+  function pickEasyMove(scored, rng) {
+    if (!scored.length) return null;
+    var r = rng();
+    if (r < 0.65) return scored[0].move;
+    if (r < 0.9) return scored[Math.floor(rng() * Math.min(4, scored.length))].move;
+    return scored[Math.floor(rng() * scored.length)].move;
+  }
+
+  // ---------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------
 
@@ -412,7 +457,10 @@
     negamax: negamax,
     search: search,
     resetNodes: resetNodes,
-    getNodes: getNodes
+    getNodes: getNodes,
+    scoreRootMoves: scoreRootMoves,
+    pickEasyMove: pickEasyMove,
+    EASY_DEPTH: EASY_DEPTH
   };
 
   if (typeof self !== 'undefined') {
