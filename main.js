@@ -5,10 +5,9 @@ const whiteSquareGrey = '#a9a9a9';
 const blackSquareGrey = '#696969';
 let lastPos;
 let position = 'start';
-let easy = false;
-let medium = false;
-let hard = false;
-let grandmaster = false;
+let level = null; // 'beginner' | 'easy' | 'medium' | 'hard' | 'grandmaster' | null
+const LEVELS = ['beginner', 'easy', 'medium', 'hard', 'grandmaster'];
+const LEVEL_LABELS = { beginner: 'Beginner', easy: 'Easy', medium: 'Medium', hard: 'Hard', grandmaster: 'Grandmaster' };
 let turn;
 let playingPuzzle = false;
 let puzzleMoves;
@@ -116,11 +115,7 @@ function getCurrentTurnText() {
 
 // Helper function to get AI level text
 function getAILevelText() {
-    if (easy) return 'Easy Level';
-    if (medium) return 'Medium Level';
-    if (hard) return 'Hard Level';
-    if (grandmaster) return 'Grandmaster Level';
-    return 'Select a difficulty level';
+    return level ? LEVEL_LABELS[level] + ' Level' : 'Select a difficulty level';
 }
 
 // Show/hide loading indicator
@@ -206,26 +201,7 @@ function onDragStart(source, piece) {
 }
 
 // AI move functions
-function makeRandomMove() {
-    toggleLoading(true);
-
-    setTimeout(() => {
-        const possibleMoves = game.moves();
-        // Game over
-        if (possibleMoves.length === 0) {
-            toggleLoading(false);
-            return;
-        }
-
-        const randomIdx = Math.floor(Math.random() * possibleMoves.length);
-        game.move(possibleMoves[randomIdx]);
-        board.position(game.fen());
-        displayGameOver();
-        toggleLoading(false);
-    }, 500); // Add a small delay for better UX
-}
-
-function makeMediumMove() {
+function makeBeginnerMove() {
     toggleLoading(true);
 
     setTimeout(() => {
@@ -260,33 +236,66 @@ function makeMediumMove() {
     }, 800);
 }
 
-// ----- Hard AI (runs ai.js's negamax search in a Web Worker) -----
-const HARD_AI_DEPTH = 3;
-const HARD_AI_TIME_MS = 1500;
-const HARD_AI_FALLBACK_MS = 5000; // give up waiting on the worker after this long
+// ----- Worker-based AI (ai-worker.js for Easy/Medium, engine-worker.js for Hard) -----
+const WORKER_FALLBACK_MS = { easy: 5000, medium: 5000, hard: 6000 }; // give up waiting on the worker after this long
 
-let hardAiWorker = null;
-let hardAiWorkerFailed = false; // sticky: once true we stop trying to use the worker
-let hardAiRequestSeq = 0;
-let hardAiPendingId = null; // id of the Hard-AI request we still care about, if any
+// One lazily-created worker per script, each with its own sticky "failed" flag
+// and its own "pending request id" (only one request is ever outstanding per
+// worker at a time, since only one AI move is in flight at once).
+let aiWorker = null; // ai-worker.js, shared by easy and medium
+let aiWorkerFailed = false;
+let aiWorkerPendingId = null;
 
-// Lazily create (once) the module-level worker used for Hard AI searches.
-function getHardAiWorker() {
-    if (hardAiWorker || hardAiWorkerFailed) return hardAiWorker;
+let engineWorker = null; // engine-worker.js, hard
+let engineWorkerFailed = false;
+let engineWorkerPendingId = null;
 
-    try {
-        hardAiWorker = new Worker('ai-worker.js');
-    } catch (err) {
-        // e.g. opened via file:// in some browsers, or Workers unavailable.
-        console.warn('Hard AI: could not create ai-worker.js Worker; falling back to heuristic moves for the rest of this session.', err);
-        hardAiWorkerFailed = true;
-        hardAiWorker = null;
+let workerRequestSeq = 0;
+
+// Lazily create (once) the module-level worker for the given kind ('easy',
+// 'medium' or 'hard'). 'easy' and 'medium' share ai-worker.js; 'hard' uses
+// engine-worker.js.
+function getWorkerFor(kind) {
+    if (kind === 'hard') {
+        if (engineWorker || engineWorkerFailed) return engineWorker;
+        try {
+            engineWorker = new Worker('engine-worker.js');
+        } catch (err) {
+            // e.g. opened via file:// in some browsers, or Workers unavailable.
+            console.warn('Hard AI: could not create engine-worker.js Worker; falling back to heuristic moves for the rest of this session.', err);
+            engineWorkerFailed = true;
+            engineWorker = null;
+        }
+        return engineWorker;
     }
 
-    return hardAiWorker;
+    if (aiWorker || aiWorkerFailed) return aiWorker;
+    try {
+        aiWorker = new Worker('ai-worker.js');
+    } catch (err) {
+        console.warn('AI: could not create ai-worker.js Worker; falling back to heuristic moves for the rest of this session.', err);
+        aiWorkerFailed = true;
+        aiWorker = null;
+    }
+    return aiWorker;
 }
 
-// One-ply heuristic move scoring used by Hard mode (original Hard-mode logic,
+// FENs of every position before the current one, oldest first, derived from
+// the game's PGN. Used by Hard mode to detect repetition. Returns [] if the
+// history can't be reconstructed for any reason.
+function getPositionHistory() {
+    try {
+        const c = new Chess();
+        c.load_pgn(game.pgn());
+        const fens = [];
+        while (c.undo()) fens.unshift(c.fen());
+        return fens;
+    } catch (err) {
+        return [];
+    }
+}
+
+// One-ply heuristic move scoring used as a worker fallback (original Hard-mode logic,
 // unchanged) — now also used as the fallback when the search worker can't be
 // used or doesn't answer in time.
 function pickHeuristicMove(possibleMoves) {
@@ -364,9 +373,9 @@ function pickHeuristicMove(possibleMoves) {
 }
 
 // Apply a move (either a chess.js verbose move object or a {from,to,promotion}
-// short move) and run the same post-move UI updates everywhere Hard AI moves.
+// short move) and run the same post-move UI updates everywhere worker AI moves.
 // Returns true if the move was legal and applied.
-function applyHardAiMove(moveInput) {
+function applyWorkerMove(moveInput) {
     const moveResult = game.move(moveInput);
     if (moveResult === null) return false;
 
@@ -377,7 +386,12 @@ function applyHardAiMove(moveInput) {
     return true;
 }
 
-function makeHardMove() {
+// Request a move from the worker for the given kind ('easy', 'medium' or
+// 'hard'). Generalizes the original Hard-only worker logic: request ids,
+// a stale-reply (pending-id) check, a check that the board hasn't moved on
+// while the worker "thought", a timeout fallback, and an onerror handler
+// that marks the worker failed and terminates it.
+function makeWorkerMove(kind) {
     toggleLoading(true);
 
     const possibleMoves = game.moves({ verbose: true });
@@ -387,7 +401,8 @@ function makeHardMove() {
     }
 
     const requestFen = game.fen();
-    const requestId = ++hardAiRequestSeq;
+    const requestId = ++workerRequestSeq;
+    const levelLabel = LEVEL_LABELS[kind];
 
     let settled = false;
     function finish() {
@@ -396,12 +411,20 @@ function makeHardMove() {
         toggleLoading(false);
     }
 
-    // Falls back to the one-ply heuristic (then to Medium if even that fails).
+    function getPendingId() {
+        return kind === 'hard' ? engineWorkerPendingId : aiWorkerPendingId;
+    }
+    function setPendingId(value) {
+        if (kind === 'hard') { engineWorkerPendingId = value; } else { aiWorkerPendingId = value; }
+    }
+
+    // Falls back to the one-ply heuristic (Hard tries Medium's worker first,
+    // if it's usable; then finally to Beginner if even the heuristic fails).
     // Never touches the board if the position has moved on from requestFen
     // (e.g. the player hit New Game / Undo / switched modes while "thinking").
     function fallbackToHeuristic(reason, err) {
         if (settled) return;
-        console.warn('Hard AI: ' + reason + ' — falling back to heuristic move.', err !== undefined ? err : '');
+        console.warn(levelLabel + ' AI: ' + reason + ' — falling back to heuristic move.', err !== undefined ? err : '');
 
         if (game.fen() !== requestFen) {
             // Board changed underneath us; nothing safe to apply.
@@ -409,15 +432,24 @@ function makeHardMove() {
             return;
         }
 
+        if (kind === 'hard') {
+            const mediumWorker = getWorkerFor('medium');
+            if (mediumWorker) {
+                settled = true; // makeWorkerMove('medium') owns its own toggleLoading(false)
+                makeWorkerMove('medium');
+                return;
+            }
+        }
+
         try {
             const fallbackMove = pickHeuristicMove(possibleMoves);
-            if (!applyHardAiMove(fallbackMove)) {
+            if (!applyWorkerMove(fallbackMove)) {
                 throw new Error('heuristic fallback produced an illegal move');
             }
         } catch (fallbackErr) {
-            console.error('Hard AI: heuristic fallback also failed; falling back to Medium move.', fallbackErr);
-            settled = true; // makeMediumMove owns its own toggleLoading(false)
-            makeMediumMove();
+            console.error(levelLabel + ' AI: heuristic fallback also failed; falling back to Beginner move.', fallbackErr);
+            settled = true; // makeBeginnerMove owns its own toggleLoading(false)
+            makeBeginnerMove();
             return;
         }
 
@@ -429,27 +461,28 @@ function makeHardMove() {
         return;
     }
 
-    const worker = getHardAiWorker();
+    const worker = getWorkerFor(kind);
     if (!worker) {
         fallbackToHeuristic('search worker is unavailable');
         return;
     }
 
-    hardAiPendingId = requestId;
+    setPendingId(requestId);
 
+    const fallbackMs = WORKER_FALLBACK_MS[kind];
     const timeoutHandle = setTimeout(function () {
-        if (hardAiPendingId === requestId) {
-            hardAiPendingId = null;
-            fallbackToHeuristic('no reply from search worker within ' + HARD_AI_FALLBACK_MS + 'ms');
+        if (getPendingId() === requestId) {
+            setPendingId(null);
+            fallbackToHeuristic('no reply from search worker within ' + fallbackMs + 'ms');
         }
-    }, HARD_AI_FALLBACK_MS);
+    }, fallbackMs);
 
     worker.onmessage = function (e) {
         const data = e.data || {};
-        if (data.id !== requestId || hardAiPendingId !== requestId) return; // stale reply, ignore
+        if (data.id !== requestId || getPendingId() !== requestId) return; // stale reply, ignore
 
         clearTimeout(timeoutHandle);
-        hardAiPendingId = null;
+        setPendingId(null);
 
         if (game.fen() !== requestFen) {
             // Board moved on while the worker was thinking; drop the reply.
@@ -467,9 +500,9 @@ function makeHardMove() {
             return;
         }
 
-        console.debug('Hard AI search: depth=' + data.depth + ' nodes=' + data.nodes + ' timeMs=' + data.timeMs);
+        console.debug(levelLabel + ' AI search: depth=' + data.depth + ' nodes=' + data.nodes + ' timeMs=' + data.timeMs);
 
-        const applied = applyHardAiMove({
+        const applied = applyWorkerMove({
             from: data.move.from,
             to: data.move.to,
             promotion: data.move.promotion
@@ -484,20 +517,35 @@ function makeHardMove() {
     };
 
     worker.onerror = function (err) {
-        if (hardAiPendingId !== requestId) return;
+        if (getPendingId() !== requestId) return;
         clearTimeout(timeoutHandle);
-        hardAiPendingId = null;
-        hardAiWorkerFailed = true;
-        try { worker.terminate(); } catch (terminateErr) { /* ignore */ }
-        hardAiWorker = null;
+        setPendingId(null);
+        if (kind === 'hard') {
+            engineWorkerFailed = true;
+            try { worker.terminate(); } catch (terminateErr) { /* ignore */ }
+            engineWorker = null;
+        } else {
+            aiWorkerFailed = true;
+            try { worker.terminate(); } catch (terminateErr) { /* ignore */ }
+            aiWorker = null;
+        }
         fallbackToHeuristic('search worker threw an error', err);
     };
 
+    let payload;
+    if (kind === 'easy') {
+        payload = { id: requestId, fen: requestFen, mode: 'easy' };
+    } else if (kind === 'medium') {
+        payload = { id: requestId, fen: requestFen, depth: 3, timeLimitMs: 1500 };
+    } else {
+        payload = { id: requestId, fen: requestFen, timeLimitMs: 2000, history: getPositionHistory() };
+    }
+
     try {
-        worker.postMessage({ id: requestId, fen: requestFen, depth: HARD_AI_DEPTH, timeLimitMs: HARD_AI_TIME_MS });
+        worker.postMessage(payload);
     } catch (err) {
         clearTimeout(timeoutHandle);
-        hardAiPendingId = null;
+        setPendingId(null);
         fallbackToHeuristic('failed to post message to search worker', err);
     }
 }
@@ -524,7 +572,7 @@ async function makeGrandmasterMove() {
 
             if (moveResult === null) {
                 console.error('Invalid move returned from API');
-                makeMediumMove();
+                makeBeginnerMove();
                 return;
             }
 
@@ -546,8 +594,8 @@ async function makeGrandmasterMove() {
             }
 
             if (!foundCheckmate) {
-                // If no checkmate found, try again or fall back to medium
-                makeMediumMove();
+                // If no checkmate found, try again or fall back to beginner
+                makeBeginnerMove();
                 return;
             }
         }
@@ -555,7 +603,7 @@ async function makeGrandmasterMove() {
         displayGameOver();
     } catch (error) {
         console.error('Error making grandmaster move:', error);
-        makeMediumMove();
+        makeBeginnerMove();
     } finally {
         toggleLoading(false);
     }
@@ -582,7 +630,7 @@ function onDrop(source, target) {
         removeHighlights();
 
         // Check if we're in AI mode but no difficulty is selected
-        if (!twoPlayerMode && !easy && !medium && !hard && !grandmaster) {
+        if (!twoPlayerMode && !level) {
             showGameResultModal('Select Difficulty', `
                 <div class="text-center">
                     <i class="fas fa-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
@@ -597,7 +645,7 @@ function onDrop(source, target) {
         // and this branch only ever fires on the human's turn) so gameReview()
         // can later ask Stockfish what the best move was FOR THE HUMAN in this
         // exact position, rather than misusing the AI's own "ponder" data.
-        if (grandmaster && !twoPlayerMode) {
+        if (level === 'grandmaster' && !twoPlayerMode) {
             preMoveFensWhite.push(game.fen());
         }
 
@@ -610,7 +658,7 @@ function onDrop(source, target) {
 
         // Illegal move
         if (moveResult === null) {
-            if (grandmaster && !twoPlayerMode) {
+            if (level === 'grandmaster' && !twoPlayerMode) {
                 preMoveFensWhite.pop(); // undo the speculative push above
             }
             return 'snapback';
@@ -634,13 +682,11 @@ function onDrop(source, target) {
 
         // Make AI move only if not in two-player mode
         if (!twoPlayerMode) {
-            if (easy) {
-                makeRandomMove();
-            } else if (medium) {
-                makeMediumMove();
-            } else if (hard) {
-                makeHardMove();
-            } else if (grandmaster) {
+            if (level === 'beginner') {
+                makeBeginnerMove();
+            } else if (level === 'easy' || level === 'medium' || level === 'hard') {
+                makeWorkerMove(level);
+            } else if (level === 'grandmaster') {
                 makeGrandmasterMove();
             }
         }
@@ -874,96 +920,29 @@ function setButtons() {
     }
 
     // Difficulty level buttons
-    $('#easy').on('click', function () {
-        gameModeDefaults();
-        if (!easy) {
-            resetAllDifficulties();
-            clearSelectedDifficulties();
-            $(this).addClass('selected');
-            easy = true;
-            switchBtnMode('easy');
-            document.getElementById('gameState').innerHTML = 'AI Game - Easy Mode';
-            // Make sure a game mode is selected (default to traditional)
-            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
-                $('#traditional').addClass('selected');
+    LEVELS.forEach(function (l) {
+        $('#' + l).on('click', function () {
+            gameModeDefaults();
+            if (level !== l) {
+                resetAllDifficulties();
+                clearSelectedDifficulties();
+                $(this).addClass('selected');
+                level = l;
+                switchBtnMode(l);
+                document.getElementById('gameState').innerHTML = 'AI Game - ' + LEVEL_LABELS[l] + ' Mode';
+                // Make sure a game mode is selected (default to traditional)
+                if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
+                    $('#traditional').addClass('selected');
+                }
+            } else {
+                gameReset();
+                level = null;
+                $(this).removeClass('selected');
+                document.getElementById('gameState').innerHTML = 'Choose Game Mode';
+                document.getElementById('level').innerHTML = 'Select a difficulty level';
             }
-        } else {
-            gameReset();
-            easy = false;
-            $(this).removeClass('selected');
-            document.getElementById('gameState').innerHTML = 'Choose Game Mode';
-            document.getElementById('level').innerHTML = 'Select a difficulty level';
-        }
-        updateGameInfo();
-    });
-
-    $('#medium').on('click', function () {
-        gameModeDefaults();
-        if (!medium) {
-            resetAllDifficulties();
-            clearSelectedDifficulties();
-            $(this).addClass('selected');
-            medium = true;
-            switchBtnMode('medium');
-            document.getElementById('gameState').innerHTML = 'AI Game - Medium Mode';
-            // Make sure a game mode is selected (default to traditional)
-            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
-                $('#traditional').addClass('selected');
-            }
-        } else {
-            gameReset();
-            medium = false;
-            $(this).removeClass('selected');
-            document.getElementById('gameState').innerHTML = 'Choose Game Mode';
-            document.getElementById('level').innerHTML = 'Select a difficulty level';
-        }
-        updateGameInfo();
-    });
-
-    $('#hard').on('click', function () {
-        gameModeDefaults();
-        if (!hard) {
-            resetAllDifficulties();
-            clearSelectedDifficulties();
-            $(this).addClass('selected');
-            hard = true;
-            switchBtnMode('hard');
-            document.getElementById('gameState').innerHTML = 'AI Game - Hard Mode';
-            // Make sure a game mode is selected (default to traditional)
-            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
-                $('#traditional').addClass('selected');
-            }
-        } else {
-            gameReset();
-            hard = false;
-            $(this).removeClass('selected');
-            document.getElementById('gameState').innerHTML = 'Choose Game Mode';
-            document.getElementById('level').innerHTML = 'Select a difficulty level';
-        }
-        updateGameInfo();
-    });
-
-    $('#grandmaster').on('click', function () {
-        gameModeDefaults();
-        if (!grandmaster) {
-            resetAllDifficulties();
-            clearSelectedDifficulties();
-            $(this).addClass('selected');
-            grandmaster = true;
-            switchBtnMode('grandmaster');
-            document.getElementById('gameState').innerHTML = 'AI Game - Grandmaster Mode';
-            // Make sure a game mode is selected (default to traditional)
-            if (!$('#myLeftnav .btn, #mySidenav .btn').hasClass('selected')) {
-                $('#traditional').addClass('selected');
-            }
-        } else {
-            gameReset();
-            grandmaster = false;
-            $(this).removeClass('selected');
-            document.getElementById('gameState').innerHTML = 'Choose Game Mode';
-            document.getElementById('level').innerHTML = 'Select a difficulty level';
-        }
-        updateGameInfo();
+            updateGameInfo();
+        });
     });
 
     // Helper function to clear selected state from all mode buttons
@@ -1060,10 +1039,7 @@ function setButtons() {
 
 // Helper function to reset all difficulty settings
 function resetAllDifficulties() {
-    easy = false;
-    medium = false;
-    hard = false;
-    grandmaster = false;
+    level = null;
 }
 
 // Set default UI for game modes
@@ -1102,7 +1078,7 @@ function gameReset() {
     if (twoPlayerMode) {
         document.getElementById('gameState').innerHTML = 'Two-Player Mode';
         document.getElementById('level').innerHTML = 'White to Move';
-    } else if (easy || medium || hard || grandmaster) {
+    } else if (level) {
         document.getElementById('gameState').innerHTML = 'New Game';
         document.getElementById('level').innerHTML = getAILevelText();
     } else {
@@ -1131,13 +1107,12 @@ function gameVisualReset() {
 
 // Switch between difficulty modes
 function switchBtnMode(mode) {
-    const levels = ['easy', 'medium', 'hard', 'grandmaster'];
     document.getElementById('level').innerHTML = mode.toUpperCase() + ' LEVEL';
 
     // Update button styles
-    levels.forEach(level => {
-        const btn = document.getElementById(level);
-        if (level === mode) {
+    LEVELS.forEach(l => {
+        const btn = document.getElementById(l);
+        if (l === mode) {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
@@ -1147,7 +1122,7 @@ function switchBtnMode(mode) {
 
 // Check if all difficulty modes are off
 function checkOff() {
-    if (!easy && !medium && !hard && !grandmaster) {
+    if (!level) {
         if (twoPlayerMode) {
             document.getElementById('level').innerHTML = getCurrentTurnText();
         } else if (playingPuzzle) {
@@ -1227,7 +1202,7 @@ function displayGameOver() {
         updateGameInfo();
 
         // If in grandmaster mode, show game review
-        if (grandmaster && !twoPlayerMode) {
+        if (level === 'grandmaster' && !twoPlayerMode) {
             gameReview();
         }
     }
@@ -1709,12 +1684,7 @@ function updateGameInfo() {
     } else {
         // AI mode info
         const currentTurn = game.turn() === 'w' ? 'White' : 'Black';
-        let difficultyLevel = 'None';
-
-        if (easy) difficultyLevel = 'Easy';
-        if (medium) difficultyLevel = 'Medium';
-        if (hard) difficultyLevel = 'Hard';
-        if (grandmaster) difficultyLevel = 'Grandmaster';
+        const difficultyLevel = level ? LEVEL_LABELS[level] : 'None';
 
         infoHTML = `
             <p class="mb-1"><i class="fas fa-chess-king me-2"></i>${currentTurn} to move</p>
