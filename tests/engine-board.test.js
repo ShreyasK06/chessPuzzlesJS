@@ -109,6 +109,23 @@ describe('check and repetition', () => {
     b.makeMove(m);
     assert.equal(b.isRepetition(), true);
   });
+
+  test('isRepetition sees a return to the board\'s own root position', () => {
+    // No setHistory() call: the loaded position itself (the search root)
+    // must be a valid repetition target when the search line shuffles
+    // back to it - the most common repetition a search encounters.
+    const b = new Engine.Board(START);
+    for (const uci of ['g1f3', 'g8f6', 'f3g1']) {
+      const m = b.generateMoves().find(x => Engine.moveToUci(x) === uci);
+      assert.ok(m, 'move ' + uci + ' should be legal');
+      b.makeMove(m);
+    }
+    assert.equal(b.isRepetition(), false);
+    const last = b.generateMoves().find(x => Engine.moveToUci(x) === 'f6g8');
+    assert.ok(last, 'move f6g8 should be legal');
+    b.makeMove(last);
+    assert.equal(b.isRepetition(), true);
+  });
 });
 
 describe('uci helpers', () => {

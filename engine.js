@@ -214,6 +214,12 @@
     this.hashStack.length = 0;
 
     this.computeHash();
+
+    // The loaded/root position is itself a valid repetition target (the
+    // most common case: a search line shuffling back to its own root), so
+    // seed the hash stack with it. makeMove/unmakeMove push/pop in lock
+    // step from here, so this entry always stays at hashStack[0].
+    this.hashStack.push([this.hashLo, this.hashHi]);
   };
 
   Board.prototype.computeHash = function () {
@@ -625,13 +631,20 @@
   };
 
   // Compares the current hash against earlier entries in
-  // [...historyHashes, ...hashStack]. The hashStack walk is limited to the
-  // last `halfmove` plies (any repetition must lie within the current
+  // [...historyHashes, ...hashStack]. hashStack[0] is always the
+  // loaded/root position (seeded in loadFen), so a search line that
+  // shuffles back to its own root is caught by this same walk - the most
+  // common repetition a search will meet. The hashStack walk is limited to
+  // the last `halfmove` plies (any repetition must lie within the current
   // 50-move-clock window) and only visits same-side-to-move entries (every
   // 2 plies back); since the side to move is itself folded into the hash,
   // equal hashes already imply equal side to move. The historyHashes walk
-  // (actual prior game positions) is unbounded, since the halfmove clock at
-  // those earlier points in the game isn't necessarily known here.
+  // (actual prior game positions, set via setHistory) is unbounded, since
+  // the halfmove clock at those earlier points in the game isn't
+  // necessarily known here. historyHashes and hashStack are independent
+  // arrays compared with a plain OR, so a coincidental duplicate between
+  // setHistory's last FEN and the root position is harmless - isRepetition
+  // only needs one match, never a count.
   Board.prototype.isRepetition = function () {
     var lo = this.hashLo, hi = this.hashHi;
 
