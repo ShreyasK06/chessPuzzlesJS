@@ -245,10 +245,12 @@ const WORKER_FALLBACK_MS = { easy: 5000, medium: 5000, hard: 6000 }; // give up 
 let aiWorker = null; // ai-worker.js, shared by easy and medium
 let aiWorkerFailed = false;
 let aiWorkerPendingId = null;
+let aiWorkerTimeoutHandle = null; // the active fallback timer for aiWorker's current request, if any
 
 let engineWorker = null; // engine-worker.js, hard
 let engineWorkerFailed = false;
 let engineWorkerPendingId = null;
+let engineWorkerTimeoutHandle = null; // the active fallback timer for engineWorker's current request, if any
 
 let workerRequestSeq = 0;
 
@@ -278,6 +280,27 @@ function getWorkerFor(kind) {
         aiWorker = null;
     }
     return aiWorker;
+}
+
+// Invalidate any in-flight worker request, for every kind, so a reply (or a
+// pending fallback timer, including a pending hard->medium handoff, which
+// reuses aiWorker's same pending-id/timeout slot) that arrives after the
+// player has switched levels becomes a no-op. Switching levels doesn't touch
+// `game`, so the FEN-staleness check inside makeWorkerMove can't catch this
+// on its own - this must be called explicitly whenever `level` changes (see
+// resetAllDifficulties(), which every level change goes through).
+function invalidatePendingWorkerRequests() {
+    aiWorkerPendingId = null;
+    engineWorkerPendingId = null;
+    if (aiWorkerTimeoutHandle !== null) {
+        clearTimeout(aiWorkerTimeoutHandle);
+        aiWorkerTimeoutHandle = null;
+    }
+    if (engineWorkerTimeoutHandle !== null) {
+        clearTimeout(engineWorkerTimeoutHandle);
+        engineWorkerTimeoutHandle = null;
+    }
+    toggleLoading(false);
 }
 
 // FENs of every position before the current one, oldest first, derived from
@@ -417,6 +440,9 @@ function makeWorkerMove(kind) {
     function setPendingId(value) {
         if (kind === 'hard') { engineWorkerPendingId = value; } else { aiWorkerPendingId = value; }
     }
+    function setTimeoutHandleFor(value) {
+        if (kind === 'hard') { engineWorkerTimeoutHandle = value; } else { aiWorkerTimeoutHandle = value; }
+    }
 
     // Falls back to the one-ply heuristic (Hard tries Medium's worker first,
     // if it's usable; then finally to Beginner if even the heuristic fails).
@@ -473,9 +499,11 @@ function makeWorkerMove(kind) {
     const timeoutHandle = setTimeout(function () {
         if (getPendingId() === requestId) {
             setPendingId(null);
+            setTimeoutHandleFor(null);
             fallbackToHeuristic('no reply from search worker within ' + fallbackMs + 'ms');
         }
     }, fallbackMs);
+    setTimeoutHandleFor(timeoutHandle);
 
     worker.onmessage = function (e) {
         const data = e.data || {};
@@ -483,6 +511,7 @@ function makeWorkerMove(kind) {
 
         clearTimeout(timeoutHandle);
         setPendingId(null);
+        setTimeoutHandleFor(null);
 
         if (game.fen() !== requestFen) {
             // Board moved on while the worker was thinking; drop the reply.
@@ -520,6 +549,7 @@ function makeWorkerMove(kind) {
         if (getPendingId() !== requestId) return;
         clearTimeout(timeoutHandle);
         setPendingId(null);
+        setTimeoutHandleFor(null);
         if (kind === 'hard') {
             engineWorkerFailed = true;
             try { worker.terminate(); } catch (terminateErr) { /* ignore */ }
@@ -546,6 +576,7 @@ function makeWorkerMove(kind) {
     } catch (err) {
         clearTimeout(timeoutHandle);
         setPendingId(null);
+        setTimeoutHandleFor(null);
         fallbackToHeuristic('failed to post message to search worker', err);
     }
 }
@@ -936,7 +967,7 @@ function setButtons() {
                 }
             } else {
                 gameReset();
-                level = null;
+                resetAllDifficulties();
                 $(this).removeClass('selected');
                 document.getElementById('gameState').innerHTML = 'Choose Game Mode';
                 document.getElementById('level').innerHTML = 'Select a difficulty level';
@@ -1039,6 +1070,7 @@ function setButtons() {
 
 // Helper function to reset all difficulty settings
 function resetAllDifficulties() {
+    invalidatePendingWorkerRequests();
     level = null;
 }
 
@@ -1320,8 +1352,8 @@ async function gameReview() {
 
 // Fetch chess puzzles from API
 async function getPuzzles() {
-    toggleLoading(true);
     resetAllDifficulties();
+    toggleLoading(true);
     resetGrandmasterAnalysisTracking();
     playingPuzzle = true;
 
