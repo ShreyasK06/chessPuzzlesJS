@@ -128,6 +128,26 @@ describe('check and repetition', () => {
   });
 });
 
+describe('castling requires an own rook on the corner', () => {
+  test('no e1g1 move when a knight (not a rook) sits on h1, even with "K" rights', () => {
+    // King on e1, f1/g1 empty, castling rights say "K" is available, but the
+    // corner square holds a knight instead of a rook (e.g. a Chess960
+    // position encoded with blanket KQkq rights). chess.js itself may still
+    // offer e1g1 here since it assumes rooks start on a/h files, so this is
+    // checked against our own engine only, not cross-checked against chess.js.
+    const b = new Engine.Board('4k3/8/8/8/8/8/8/4K2N w K - 0 1');
+    const moves = b.generateMoves().map(Engine.moveToUci);
+    assert.ok(!moves.includes('e1g1'), 'e1g1 should not be generated without a rook on h1');
+  });
+
+  test('generateMoves still matches chess.js on the start position', () => {
+    const ours = new Engine.Board(START).generateMoves().map(Engine.moveToUci).sort();
+    const theirs = new Chess(START).moves({ verbose: true })
+      .map(m => m.from + m.to + (m.promotion || '')).sort();
+    assert.deepEqual(ours, theirs);
+  });
+});
+
 describe('uci helpers', () => {
   test('moveToUci / moveFrom / moveTo / movePromo', () => {
     const b = new Engine.Board('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1');
