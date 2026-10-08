@@ -406,8 +406,10 @@
   Board.prototype._genCastle = function (s, moves) {
     var us = this.side;
     var squares = this.squares;
+    var ownRook = (us << 3) | ROOK;
     if (us === WHITE && s === sq(0, 4)) {
       if ((this.castlingRights & CASTLE_WK) &&
+        squares[sq(0, 7)] === ownRook &&
         squares[sq(0, 5)] === EMPTY && squares[sq(0, 6)] === EMPTY &&
         !this.isSquareAttacked(sq(0, 4), BLACK) &&
         !this.isSquareAttacked(sq(0, 5), BLACK) &&
@@ -415,6 +417,7 @@
         moves.push(encodeMove(sq(0, 4), sq(0, 6), 0, FLAG_CASTLE));
       }
       if ((this.castlingRights & CASTLE_WQ) &&
+        squares[sq(0, 0)] === ownRook &&
         squares[sq(0, 3)] === EMPTY && squares[sq(0, 2)] === EMPTY && squares[sq(0, 1)] === EMPTY &&
         !this.isSquareAttacked(sq(0, 4), BLACK) &&
         !this.isSquareAttacked(sq(0, 3), BLACK) &&
@@ -423,6 +426,7 @@
       }
     } else if (us === BLACK && s === sq(7, 4)) {
       if ((this.castlingRights & CASTLE_BK) &&
+        squares[sq(7, 7)] === ownRook &&
         squares[sq(7, 5)] === EMPTY && squares[sq(7, 6)] === EMPTY &&
         !this.isSquareAttacked(sq(7, 4), WHITE) &&
         !this.isSquareAttacked(sq(7, 5), WHITE) &&
@@ -430,6 +434,7 @@
         moves.push(encodeMove(sq(7, 4), sq(7, 6), 0, FLAG_CASTLE));
       }
       if ((this.castlingRights & CASTLE_BQ) &&
+        squares[sq(7, 0)] === ownRook &&
         squares[sq(7, 3)] === EMPTY && squares[sq(7, 2)] === EMPTY && squares[sq(7, 1)] === EMPTY &&
         !this.isSquareAttacked(sq(7, 4), WHITE) &&
         !this.isSquareAttacked(sq(7, 3), WHITE) &&
