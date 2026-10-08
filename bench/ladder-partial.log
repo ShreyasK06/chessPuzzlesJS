@@ -1,0 +1,44 @@
+Machine: Node v22.18.0 | 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz | win32 x64
+Seed: 20260101 | games per pairing: 20 | Hard timeLimitMs: 2000 | draw adjudicated at 200 plies
+
+Beginner vs Easy (20 games):
+  [Beginner-Easy] game 1/20 - Easy as White - stronger_win (checkmate) - 53 plies - 5098 ms
+  [Beginner-Easy] game 2/20 - Easy as White - stronger_win (checkmate) - 43 plies - 13298 ms
+  [Beginner-Easy] game 3/20 - Easy as White - stronger_win (checkmate) - 41 plies - 7665 ms
+  [Beginner-Easy] game 4/20 - Easy as White - stronger_win (checkmate) - 52 plies - 9367 ms
+  [Beginner-Easy] game 5/20 - Easy as White - stronger_win (checkmate) - 24 plies - 3892 ms
+  [Beginner-Easy] game 6/20 - Easy as Black - stronger_win (checkmate) - 38 plies - 5953 ms
+  [Beginner-Easy] game 7/20 - Easy as Black - stronger_win (checkmate) - 28 plies - 3475 ms
+  [Beginner-Easy] game 8/20 - Easy as Black - stronger_win (checkmate) - 32 plies - 4385 ms
+  [Beginner-Easy] game 9/20 - Easy as Black - stronger_win (checkmate) - 37 plies - 5213 ms
+  [Beginner-Easy] game 10/20 - Easy as Black - stronger_win (checkmate) - 159 plies - 11900 ms
+  [Beginner-Easy] game 11/20 - Easy as White - stronger_win (checkmate) - 83 plies - 10337 ms
+  [Beginner-Easy] game 12/20 - Easy as White - stronger_win (checkmate) - 85 plies - 13612 ms
+  [Beginner-Easy] game 13/20 - Easy as White - stronger_win (checkmate) - 25 plies - 5723 ms
+  [Beginner-Easy] game 14/20 - Easy as White - stronger_win (checkmate) - 46 plies - 4947 ms
+  [Beginner-Easy] game 15/20 - Easy as White - stronger_win (checkmate) - 38 plies - 4396 ms
+  [Beginner-Easy] game 16/20 - Easy as Black - stronger_win (checkmate) - 72 plies - 7606 ms
+  [Beginner-Easy] game 17/20 - Easy as Black - stronger_win (checkmate) - 60 plies - 4603 ms
+  [Beginner-Easy] game 18/20 - Easy as Black - stronger_win (checkmate) - 16 plies - 1977 ms
+  [Beginner-Easy] game 19/20 - Easy as Black - stronger_win (checkmate) - 17 plies - 2602 ms
+  [Beginner-Easy] game 20/20 - Easy as Black - stronger_win (checkmate) - 21 plies - 2416 ms
+
+Easy vs Medium (20 games):
+  [Easy-Medium] game 1/20 - Medium as White - stronger_win (checkmate) - 47 plies - 41188 ms
+  [Easy-Medium] game 2/20 - Medium as White - stronger_win (checkmate) - 117 plies - 73835 ms
+  [Easy-Medium] game 3/20 - Medium as White - stronger_win (checkmate) - 83 plies - 86568 ms
+  [Easy-Medium] game 4/20 - Medium as White - stronger_win (checkmate) - 46 plies - 41163 ms
+  [Easy-Medium] game 5/20 - Medium as White - stronger_win (checkmate) - 56 plies - 56467 ms
+  [Easy-Medium] game 6/20 - Medium as Black - stronger_win (checkmate) - 36 plies - 28660 ms
+  [Easy-Medium] game 7/20 - Medium as Black - stronger_win (checkmate) - 52 plies - 47738 ms
+  [Easy-Medium] game 8/20 - Medium as Black - stronger_win (checkmate) - 32 plies - 25648 ms
+  [Easy-Medium] game 9/20 - Medium as Black - stronger_win (checkmate) - 79 plies - 41152 ms
+  [Easy-Medium] game 10/20 - Medium as Black - draw (threefold repetition) - 59 plies - 30951 ms
+  [Easy-Medium] game 11/20 - Medium as White - stronger_win (checkmate) - 53 plies - 39636 ms
+  [Easy-Medium] game 12/20 - Medium as White - stronger_win (checkmate) - 129 plies - 131135 ms
+  [Easy-Medium] game 13/20 - Medium as White - stronger_win (checkmate) - 49 plies - 49867 ms
+  [Easy-Medium] game 14/20 - Medium as White - stronger_win (checkmate) - 52 plies - 48227 ms
+  [Easy-Medium] game 15/20 - Medium as White - stronger_win (checkmate) - 44 plies - 35432 ms
+  [Easy-Medium] game 16/20 - Medium as Black - stronger_win (checkmate) - 76 plies - 61713 ms
+  [Easy-Medium] game 17/20 - Medium as Black - stronger_win (checkmate) - 56 plies - 51758 ms
+  [Easy-Medium] game 18/20 - Medium as Black - stronger_win (checkmate) - 50 plies - 51792 ms
