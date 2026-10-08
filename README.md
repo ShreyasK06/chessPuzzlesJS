@@ -1,6 +1,8 @@
 # chessPuzzlesJS
 
-A browser-based chess app with four AI difficulty levels, daily puzzles, Chess960, a position playground, and opening positions. It runs entirely client-side (no build step): open `index.html` or serve the folder statically.
+A browser-based chess app with five AI difficulty levels — including a custom-written JavaScript chess engine — daily puzzles, Chess960, a position playground, and one-click opening positions. It runs entirely client-side with no build step: open `index.html` or serve the folder statically.
+
+![Chess Puzzles playing against the Hard engine](docs/images/screenshot.png)
 
 ## Features
 
@@ -12,25 +14,46 @@ A browser-based chess app with four AI difficulty levels, daily puzzles, Chess96
 - **Openings:** one-click positions for the Ruy Lopez, Italian, French, Queen's Gambit, English, and Sicilian.
 
 **Interface**
-- Legal-move highlighting (normal moves, captures, checks), move history, undo/redo, game-over detection (checkmate, stalemate, repetition, insufficient material), dark mode, and a help dialog.
+- Legal-move highlighting (normal moves, captures, checks), move history, undo/redo, game-over detection (checkmate, stalemate, repetition, insufficient material), dark mode, two-player same-device mode, and a help dialog.
 
 ## AI levels
 
-| Level | How it plays |
-|---|---|
-| **Easy** | A random legal move. |
-| **Medium** | Prefers a check, then a capture, otherwise a random move. |
-| **Hard** | Negamax search with alpha-beta pruning (see below). Falls back to a one-move heuristic if the search worker is unavailable. |
-| **Grandmaster** | Asks a Stockfish 16 API for the best move; falls back to a mate-in-one check and then to Medium-style play if the call fails. After a game, a review compares your moves with the engine's suggestions. |
+| Level | How it plays | Engine |
+|---|---|---|
+| **Beginner** | Prefers a check, then a capture, otherwise a random legal move. | `main.js` |
+| **Easy** | A shallow 2-ply search that deliberately doesn't always play its best move: 65% of the time it plays the best move found, 25% of the time one of its top 4 moves, and 10% of the time any legal move. | `ai.js`, in a Web Worker |
+| **Medium** | Negamax search with alpha-beta pruning, depth 3, under a 1.5 s time limit. | `ai.js`, in a Web Worker |
+| **Hard** | A custom chess engine (see below), thinking for about 2 s per move. | `engine.js`, in a Web Worker |
+| **Grandmaster** | Asks a Stockfish 16 API for the best move, with local fallbacks if the call fails. After a game, a review compares your moves with the engine's suggestions. | `main.js` |
 
-### Hard-level search engine (`ai.js`)
+If a worker is unavailable or too slow to answer in time, each level falls back to a simpler one: Hard falls back to Medium, Medium falls back to a one-ply heuristic, and that heuristic falls back to Beginner-style play if it also fails.
 
-- **Negamax with alpha-beta pruning**, with pruning switchable off so the search can be compared against a full minimax scan.
-- **Evaluation:** material plus piece-square tables (Michniewski's simplified evaluation values), with a separate king table for endgames.
-- **Move ordering:** captures first (most valuable victim, least valuable attacker), then checks, then quiet moves, which makes pruning effective.
-- **Mate and draw handling:** mate scores are depth-adjusted so faster mates are preferred; draws score zero.
-- **Iterative deepening under a time budget:** the Hard level searches up to depth 3 with a 1.5 s limit, keeping the best move from the last completed depth.
-- **Runs in a Web Worker** (`ai-worker.js`) so the board stays responsive while the engine thinks. The search reports depth reached, nodes searched, and time taken in the browser console.
+## The Hard engine (`engine.js`)
+
+`engine.js` is a self-contained chess engine written for this project. It does not use chess.js for move generation — chess.js remains the source of truth for the game itself (rules, legality of the player's moves, game-over detection), but the Hard level's search runs entirely on its own board representation.
+
+**Board & move generation**
+- 0x88 board representation with incremental Zobrist hashing and in-place make/unmake (no board copying per move).
+- Legal moves are verified with perft against the published node counts for 6 standard test positions (the starting position and Kiwipete, positions 3 through 6), and cross-checked move-for-move against chess.js.
+- Perft runs at roughly 6 million nodes/s in Node.
+
+**Search**
+- Iterative deepening with principal variation search.
+- A transposition table with 2^20 entries.
+- Quiescence search with delta pruning.
+- Null-move pruning, late move reductions, and check extensions.
+- Killer-move and history move ordering.
+- Repetition and 50-move draw detection using the real game history.
+
+**Evaluation**
+- Tapered middlegame/endgame evaluation using PeSTO material values and piece-square tables.
+- Passed, doubled, and isolated pawn terms; bishop pair; rooks on open files; mobility.
+- King safety (pawn shield, attackers near the king).
+
+**Opening book**
+- 62 positions drawn from mainstream openings; the engine picks randomly among the book moves for a given position.
+
+**Performance** (Node 22, i5-1135G7): about 340,000 nodes/s, reaching depth 7 in 2 s from a middlegame position; about 520,000 nodes/s, reaching depth 10 from the starting position. For comparison, the previous engine (now the Medium level) searched roughly 3,000 nodes/s in the browser, because it generated moves through chess.js.
 
 ## Running it
 
@@ -40,23 +63,31 @@ python -m http.server 8000
 # then open http://localhost:8000
 ```
 
-Opening `index.html` directly from disk still works for everything except the Hard-level search, which will use its heuristic fallback because browsers block workers on `file://`.
+Opening `index.html` directly from disk still works, but Web Workers are blocked on `file://` in most browsers, so the worker-based levels (Easy, Medium, Hard) fall back to simpler play.
 
 ### API keys
 
 Daily Puzzle and Grandmaster use third-party APIs through RapidAPI. The app has built-in fallbacks for both, but to use the live APIs you need your own RapidAPI key. Because this is a static site, any key placed in client-side code is visible to visitors; use a key with a restricted quota, or put the calls behind a small proxy.
 
-## Tests and benchmarks
+## Testing
 
-Requires Node.js (no dependencies to install).
+Requires Node.js 22 or later, with no dependencies to install.
 
 ```bash
-npm test                  # unit tests for ai.js (node --test)
-node bench/benchmark.js   # search cost with and without pruning -> bench/results.json
-node bench/match.js       # Hard vs Easy/Medium, 20 games each -> bench/match-results.json
+npm test   # node --test tests/*.test.js
 ```
 
-**Pruning benchmark** (9 positions: 3 opening, 3 middlegame, 3 endgame; one search per position; Node 22, i5-1135G7). Depth N includes iterations 1 through N, because the search deepens iteratively.
+This runs 101 tests covering engine move generation and perft, evaluation, search (tactics, time limits, the opening book), the Medium engine (`ai.js`), and the Easy move picker. One throughput test asserts at least 100,000 nodes/s; it can fail on a heavily loaded machine even though the engine itself is fine.
+
+## Benchmarks
+
+### Medium engine pruning benchmark
+
+```bash
+node bench/benchmark.js   # -> bench/results.json
+```
+
+Pruning benchmark for the Medium engine (`ai.js`), 9 positions: 3 opening, 3 middlegame, 3 endgame; one search per position; Node 22, i5-1135G7. Depth N includes iterations 1 through N, because the search deepens iteratively.
 
 | Depth | Nodes, pruned | Nodes, unpruned | Nodes cut | Avg time/move, pruned | Avg time/move, unpruned | Speedup |
 |---|---|---|---|---|---|---|
@@ -66,38 +97,52 @@ node bench/match.js       # Hard vs Easy/Medium, 20 games each -> bench/match-re
 
 At depth 4, the unpruned search ran on the starting position only, because the full 9-position run would have exceeded the time budget. Pruned and unpruned searches returned the same score in every position, which confirms pruning doesn't change the result.
 
-**Strength match** (Hard at depth 3 with no time limit, alternating colors, draw declared at 200 plies, seeded random opponents):
+### Level ladder
 
-| Opponent | W / D / L | Avg game length |
-|---|---|---|
-| Easy | 20 / 0 / 0 | 35.6 plies |
-| Medium | 20 / 0 / 0 | 35.5 plies |
+```bash
+node bench/ladder.js   # --games N, --hard-ms N, --selftest; writes bench/ladder-results.json
+```
 
-All 40 wins were by checkmate. In the browser, Hard also stops at a 1.5 s time limit, so on slower machines it may play at a shallower depth than in this match.
+Each level plays the next one up from 5 opening positions with alternating colors, with draws adjudicated at 200 plies. A full run was interrupted by low memory on the machine it was run on, so these results are partial:
+
+| Match | Games | Result (stronger side) | Elo gap, 95% lower bound |
+|---|---|---|---|
+| Easy vs Beginner | 20 | 20 W / 0 D / 0 L | ≥ 395 |
+| Medium vs Easy | 18 | 17 W / 1 D / 0 L | ≥ 375 |
+| Hard vs Medium | — | pending | — |
+
+Adjacent levels so far are clearly separated in strength. Hard's rating relative to Medium has not been measured yet; run `node bench/ladder.js` to complete it. These are relative rating estimates, anchored on Medium ≈ 1200 as a design-based estimate — not ratings measured against rated opponents.
 
 ## Tech stack
 
-JavaScript (ES6), [chess.js](https://github.com/jhlywa/chess.js) for rules and move generation, [chessboard.js](https://chessboardjs.com/) for the board UI, jQuery, Bootstrap 5, Web Workers.
+JavaScript (the engine is written in an ES5 style for broad compatibility; the UI uses ES6), [chess.js](https://github.com/jhlywa/chess.js) 0.x for rules and move generation, [chessboard.js](https://chessboardjs.com/) for the board UI, jQuery, Bootstrap 5, Web Workers, and Node's built-in test runner.
 
 ## Project layout
 
 ```
 index.html       UI shell
-main.js          Game modes, controls, difficulty logic, puzzles, Chess960
-ai.js            Negamax / alpha-beta engine and evaluation
-ai-worker.js     Web Worker wrapper around ai.js
-tests/           Unit tests for ai.js
-bench/           Pruning benchmark, strength match, and their results
-chess.js         Third-party rules library (BSD license, Jeff Hlywa)
-main.css         Styles
+main.js           Game modes, controls, difficulty logic, puzzles, Chess960
+main.css          Styles
+ai.js             Medium-level negamax / alpha-beta engine and evaluation
+ai-worker.js      Web Worker wrapper around ai.js
+engine.js         Hard-level engine: board, search, evaluation, opening book
+engine-worker.js  Web Worker wrapper around engine.js
+chess.js          Third-party rules library (BSD license, Jeff Hlywa)
+tests/            ai, easy, engine-board, engine-eval, and engine-search tests
+bench/            benchmark.js (pruning benchmark + results.json), ladder.js
+docs/             design spec, implementation plan, images
+img/              board and piece images
+package.json
+LICENSE
 ```
 
 ## Known limitations
 
 - Chess960 castling: chess.js 0.x assumes rooks start on the a and h files, so castling may not work correctly in Chess960 positions where they don't.
-- Pawn promotion defaults to a queen.
+- Pawn promotion always promotes to a queen for the player.
 - The Grandmaster review compares your moves with the engine's *predicted reply*, so its output is approximate.
-- The Hard level looks three plies ahead at most, with no quiescence search, so it can misjudge positions with pending captures.
+- The Hard engine has no endgame tablebases and no pondering.
+- Daily Puzzle and Grandmaster depend on third-party APIs, with built-in fallbacks when they're unavailable.
 
 ## License
 
