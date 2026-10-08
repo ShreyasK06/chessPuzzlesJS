@@ -953,7 +953,9 @@ function setButtons() {
     // Difficulty level buttons
     LEVELS.forEach(function (l) {
         $('#' + l).on('click', function () {
-            gameModeDefaults();
+            // Apply board/level styling but keep the AI difficulty dropdown
+            // visible so the player can switch levels at any time.
+            applyBoardModeStyling();
             if (level !== l) {
                 resetAllDifficulties();
                 clearSelectedDifficulties();
@@ -1077,6 +1079,13 @@ function resetAllDifficulties() {
 // Set default UI for game modes
 function gameModeDefaults() {
     document.getElementById('ai').classList.add('gameMode');
+    applyBoardModeStyling();
+}
+
+// Apply the board/level styling used by game modes, without hiding the AI
+// difficulty dropdown (Traditional mode needs it to stay visible so the
+// player can switch levels at any time).
+function applyBoardModeStyling() {
     document.getElementById('board').classList.add('gameModes');
     document.getElementById('level').classList.remove('normal');
 }
