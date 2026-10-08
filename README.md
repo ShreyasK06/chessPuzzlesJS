@@ -103,12 +103,12 @@ At depth 4, the unpruned search ran on the starting position only, because the f
 node bench/ladder.js   # --games N, --hard-ms N, --selftest; writes bench/ladder-results.json
 ```
 
-Each level plays the next one up from 5 opening positions with alternating colors, with draws adjudicated at 200 plies. A full run was interrupted by low memory on the machine it was run on, so these results are partial:
+Each level plays the next one up from 5 opening positions with alternating colors, with draws adjudicated at 200 plies. A full run was interrupted by low memory on the machine it was run on, so these results are partial. Raw log of the interrupted run: `bench/ladder-partial.log`; a complete run writes `bench/ladder-results.json`.
 
-| Match | Games | Result (stronger side) | Elo gap, 95% lower bound |
+| Match | Score | Elo gap (estimate) | 95% lower bound |
 |---|---|---|---|
-| Easy vs Beginner | 20 | 20 W / 0 D / 0 L | ≥ 395 |
-| Medium vs Easy | 18 | 17 W / 1 D / 0 L | ≥ 375 |
+| Easy vs Beginner (20 games, 20 W / 0 D / 0 L) | 100% | ≥ 636 (sweep, bound) | ≈ 395 |
+| Medium vs Easy (18 games, 17 W / 1 D / 0 L) | 97.2% | ≈ 618 | ≈ 375 |
 | Hard vs Medium | — | pending | — |
 
 Adjacent levels so far are clearly separated in strength. Hard's rating relative to Medium has not been measured yet; run `node bench/ladder.js` to complete it. These are relative rating estimates, anchored on Medium ≈ 1200 as a design-based estimate — not ratings measured against rated opponents.
@@ -120,7 +120,7 @@ JavaScript (the engine is written in an ES5 style for broad compatibility; the U
 ## Project layout
 
 ```
-index.html       UI shell
+index.html        UI shell
 main.js           Game modes, controls, difficulty logic, puzzles, Chess960
 main.css          Styles
 ai.js             Medium-level negamax / alpha-beta engine and evaluation
@@ -129,7 +129,8 @@ engine.js         Hard-level engine: board, search, evaluation, opening book
 engine-worker.js  Web Worker wrapper around engine.js
 chess.js          Third-party rules library (BSD license, Jeff Hlywa)
 tests/            ai, easy, engine-board, engine-eval, and engine-search tests
-bench/            benchmark.js (pruning benchmark + results.json), ladder.js
+bench/            benchmark.js (pruning benchmark + results.json), ladder.js,
+                  ladder-partial.log (raw log of the interrupted ladder run)
 docs/             design spec, implementation plan, images
 img/              board and piece images
 package.json
@@ -141,6 +142,7 @@ LICENSE
 - Chess960 castling: chess.js 0.x assumes rooks start on the a and h files, so castling may not work correctly in Chess960 positions where they don't.
 - Pawn promotion always promotes to a queen for the player.
 - The Grandmaster review compares your moves with the engine's *predicted reply*, so its output is approximate.
+- The Medium level (`ai.js`) looks at most three plies ahead with no quiescence search, so it can misjudge positions with pending captures.
 - The Hard engine has no endgame tablebases and no pondering.
 - Daily Puzzle and Grandmaster depend on third-party APIs, with built-in fallbacks when they're unavailable.
 
