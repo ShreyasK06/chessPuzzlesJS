@@ -2,6 +2,8 @@
 
 A browser-based chess app with five AI difficulty levels — including a custom-written JavaScript chess engine — daily puzzles, Chess960, a position playground, and one-click opening positions. It runs entirely client-side with no build step: open `index.html` or serve the folder statically.
 
+**[Play it live](https://shreyask06.github.io/chessPuzzlesJS/)**
+
 ![Chess Puzzles playing against the Hard engine](docs/images/screenshot.png)
 
 ## Features
